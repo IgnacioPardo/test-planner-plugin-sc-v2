@@ -15,29 +15,62 @@ Do NOT skip steps. Do NOT proceed if validation fails.
 
 ## CRITICAL: User Confirmation Between Steps
 
-<<<<<<< tomaspiaggio/features-json
 After each step (1, 2, and 3), you MUST present the summary and then ask the user for
 confirmation using the `AskUserQuestion` tool. This creates an interactive
 UI prompt that makes it clear the user needs to respond before the pipeline continues.
 
 After calling `AskUserQuestion`, wait for the user's response.
 Only proceed to the next step after they confirm.
-=======
-After each step (1, 2, and 3), you MUST stop and wait for the user to respond before proceeding.
-This means: present the summary, ask the confirmation question, and then **end your turn**.
-Do NOT call any more tools. Do NOT spawn the next subagent. Do NOT continue with any work.
-Your message must END with the confirmation question. The user's next message is their answer.
-Only after the user explicitly confirms should you proceed to the next step.
->>>>>>> main
 
 ## Before Starting
 
-Create the output directory:
+Create the output directory and save the project root (subagents change working directory, so we need an absolute path reference):
 ```bash
+AUTONOMA_ROOT="$(pwd)"
+echo "$AUTONOMA_ROOT" > /tmp/autonoma-project-root
 mkdir -p autonoma/skills autonoma/qa-tests
 ```
 
+Read the environment variables. These are required for reporting progress back to Autonoma:
+- `AUTONOMA_API_KEY` — your Autonoma API key
+- `AUTONOMA_PROJECT_ID` — your Autonoma project ID
+- `AUTONOMA_API_URL` — Autonoma API base URL
+
+Before creating the record, derive a clean human-readable application name from the repository. Look at the git remote URL, the directory name, and any `package.json` / `pyproject.toml` / `README.md` to infer what the product is actually called. Prefer the product name over the repo slug (e.g. "My App" not "my-app-v2-final"). Store it in `APP_NAME`.
+
+Create the generation record so the dashboard can track progress in real time:
+```bash
+RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST "${AUTONOMA_API_URL}/v1/setup/setups" \
+  -H "Authorization: Bearer ${AUTONOMA_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d "{\"applicationId\":\"${AUTONOMA_PROJECT_ID}\",\"repoName\":\"${APP_NAME}\"}")
+HTTP_STATUS=$(echo "$RESPONSE" | grep -o "HTTP_STATUS:[0-9]*" | cut -d: -f2)
+BODY=$(echo "$RESPONSE" | sed '/HTTP_STATUS:/d')
+echo "Setup API response (HTTP $HTTP_STATUS): $BODY"
+GENERATION_ID=$(echo "$BODY" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo '')
+mkdir -p autonoma
+echo "$GENERATION_ID" > autonoma/.generation-id
+echo "Generation ID: $GENERATION_ID"
+```
+
+If `GENERATION_ID` is empty, log the HTTP status and response body above for debugging, then continue anyway — reporting is best-effort and must never block test generation.
+
 ## Step 1: Generate Knowledge Base
+
+Report step start:
+```bash
+AUTONOMA_ROOT=$(cat /tmp/autonoma-project-root 2>/dev/null || echo '.')
+GENERATION_ID=$(cat "$AUTONOMA_ROOT/autonoma/.generation-id" 2>/dev/null || echo '')
+echo "GENERATION_ID=${GENERATION_ID:-<empty>}"
+[ -n "$GENERATION_ID" ] && curl -f -X POST "${AUTONOMA_API_URL}/v1/setup/setups/${GENERATION_ID}/events" \
+  -H "Authorization: Bearer ${AUTONOMA_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"step.started","data":{"step":0,"name":"Knowledge Base"}}' || true
+[ -n "$GENERATION_ID" ] && curl -f -X POST "${AUTONOMA_API_URL}/v1/setup/setups/${GENERATION_ID}/events" \
+  -H "Authorization: Bearer ${AUTONOMA_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"log","data":{"message":"Analyzing codebase structure and identifying features..."}}' || true
+```
 
 Spawn the `kb-generator` subagent with the following task:
 
@@ -52,17 +85,61 @@ Spawn the `kb-generator` subagent with the following task:
 1. Verify `autonoma/AUTONOMA.md` and `autonoma/features.json` exist and are non-empty
 2. The PostToolUse hook will have validated the frontmatter and features.json schema automatically
 3. Read the file and present the frontmatter to the user — specifically the core_flows table
-<<<<<<< tomaspiaggio/features-json
+
+Report step complete and upload skills:
+```bash
+AUTONOMA_ROOT=$(cat /tmp/autonoma-project-root 2>/dev/null || echo '.')
+GENERATION_ID=$(cat "$AUTONOMA_ROOT/autonoma/.generation-id" 2>/dev/null || echo '')
+echo "GENERATION_ID=${GENERATION_ID:-<empty>}"
+SKILL_COUNT=$(ls "$AUTONOMA_ROOT/autonoma/skills/"*.md 2>/dev/null | wc -l | tr -d ' ')
+[ -n "$GENERATION_ID" ] && curl -f -X POST "${AUTONOMA_API_URL}/v1/setup/setups/${GENERATION_ID}/events" \
+  -H "Authorization: Bearer ${AUTONOMA_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d "{\"type\":\"log\",\"data\":{\"message\":\"Knowledge base complete. Generated ${SKILL_COUNT} skills. Uploading to dashboard...\"}}" || true
+
+[ -n "$GENERATION_ID" ] && curl -f -X POST "${AUTONOMA_API_URL}/v1/setup/setups/${GENERATION_ID}/events" \
+  -H "Authorization: Bearer ${AUTONOMA_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"step.completed","data":{"step":0,"name":"Knowledge Base"}}' || true
+
+[ -n "$GENERATION_ID" ] && python3 -c "
+import os, json, sys
+root = open('/tmp/autonoma-project-root').read().strip() if os.path.exists('/tmp/autonoma-project-root') else '.'
+skills = []
+d = os.path.join(root, 'autonoma/skills')
+if os.path.isdir(d):
+    for f in os.listdir(d):
+        if f.endswith('.md'):
+            with open(os.path.join(d, f)) as fh:
+                skills.append({'name': f, 'content': fh.read()})
+print(json.dumps({'skills': skills}))
+" | curl -f -X POST "${AUTONOMA_API_URL}/v1/setup/setups/${GENERATION_ID}/artifacts" \
+  -H "Authorization: Bearer ${AUTONOMA_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d @- || true
+```
+
 4. Call `AskUserQuestion` with:
    - question: "Does this core flows table look correct? These flows determine how the test budget is distributed."
    - options: ["Yes, proceed to Step 2", "I want to suggest changes"]
 5. Wait for the user's response before proceeding.
-=======
-4. End your message with exactly this question: **"Does this core flows table look correct? These flows determine how the test budget is distributed. Please confirm or suggest changes before I proceed to Step 2."**
-5. **STOP. End your turn. Do NOT call any tools or spawn any agents. Wait for the user to reply.**
->>>>>>> main
 
 ## Step 2: Generate Scenarios
+
+Report step start:
+```bash
+AUTONOMA_ROOT=$(cat /tmp/autonoma-project-root 2>/dev/null || echo '.')
+GENERATION_ID=$(cat "$AUTONOMA_ROOT/autonoma/.generation-id" 2>/dev/null || echo '')
+echo "GENERATION_ID=${GENERATION_ID:-<empty>}"
+[ -n "$GENERATION_ID" ] && curl -f -X POST "${AUTONOMA_API_URL}/v1/setup/setups/${GENERATION_ID}/events" \
+  -H "Authorization: Bearer ${AUTONOMA_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"step.started","data":{"step":1,"name":"Scenarios"}}' || true
+[ -n "$GENERATION_ID" ] && curl -f -X POST "${AUTONOMA_API_URL}/v1/setup/setups/${GENERATION_ID}/events" \
+  -H "Authorization: Bearer ${AUTONOMA_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"log","data":{"message":"Mapping data model and designing test data environments..."}}' || true
+```
 
 Spawn the `scenario-generator` subagent with the following task:
 
@@ -75,17 +152,43 @@ Spawn the `scenario-generator` subagent with the following task:
 1. Verify `autonoma/scenarios.md` exists and is non-empty
 2. The PostToolUse hook will have validated the frontmatter format automatically
 3. Read the file and present the frontmatter summary to the user — scenario names, entity counts, entity types
-<<<<<<< tomaspiaggio/features-json
+
+Report step complete:
+```bash
+AUTONOMA_ROOT=$(cat /tmp/autonoma-project-root 2>/dev/null || echo '.')
+GENERATION_ID=$(cat "$AUTONOMA_ROOT/autonoma/.generation-id" 2>/dev/null || echo '')
+echo "GENERATION_ID=${GENERATION_ID:-<empty>}"
+[ -n "$GENERATION_ID" ] && curl -f -X POST "${AUTONOMA_API_URL}/v1/setup/setups/${GENERATION_ID}/events" \
+  -H "Authorization: Bearer ${AUTONOMA_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"log","data":{"message":"Scenarios generated. 3 test data environments defined (standard, empty, large)."}}' || true
+[ -n "$GENERATION_ID" ] && curl -f -X POST "${AUTONOMA_API_URL}/v1/setup/setups/${GENERATION_ID}/events" \
+  -H "Authorization: Bearer ${AUTONOMA_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"step.completed","data":{"step":1,"name":"Scenarios"}}' || true
+```
+
 4. Call `AskUserQuestion` with:
    - question: "Do these scenarios look correct? The standard scenario data becomes hard assertions in your tests."
    - options: ["Yes, proceed to Step 3", "I want to suggest changes"]
 5. Wait for the user's response before proceeding.
-=======
-4. End your message with exactly this question: **"Do these scenarios look correct? The standard scenario data becomes hard assertions in your tests. Please confirm or suggest changes before I proceed to Step 3."**
-5. **STOP. End your turn. Do NOT call any tools or spawn any agents. Wait for the user to reply.**
->>>>>>> main
 
 ## Step 3: Generate E2E Test Cases
+
+Report step start:
+```bash
+AUTONOMA_ROOT=$(cat /tmp/autonoma-project-root 2>/dev/null || echo '.')
+GENERATION_ID=$(cat "$AUTONOMA_ROOT/autonoma/.generation-id" 2>/dev/null || echo '')
+echo "GENERATION_ID=${GENERATION_ID:-<empty>}"
+[ -n "$GENERATION_ID" ] && curl -f -X POST "${AUTONOMA_API_URL}/v1/setup/setups/${GENERATION_ID}/events" \
+  -H "Authorization: Bearer ${AUTONOMA_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"step.started","data":{"step":2,"name":"E2E Tests"}}' || true
+[ -n "$GENERATION_ID" ] && curl -f -X POST "${AUTONOMA_API_URL}/v1/setup/setups/${GENERATION_ID}/events" \
+  -H "Authorization: Bearer ${AUTONOMA_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"log","data":{"message":"Generating E2E test cases from knowledge base and scenarios..."}}' || true
+```
 
 Spawn the `test-case-generator` subagent with the following task:
 
@@ -101,17 +204,67 @@ Spawn the `test-case-generator` subagent with the following task:
 1. Verify `autonoma/qa-tests/INDEX.md` exists and is non-empty
 2. The PostToolUse hook will have validated the INDEX frontmatter and individual test file frontmatter
 3. Read the INDEX.md and present the summary to the user — total tests, folder breakdown, coverage correlation
-<<<<<<< tomaspiaggio/features-json
+
+Report step complete and upload test cases:
+```bash
+AUTONOMA_ROOT=$(cat /tmp/autonoma-project-root 2>/dev/null || echo '.')
+GENERATION_ID=$(cat "$AUTONOMA_ROOT/autonoma/.generation-id" 2>/dev/null || echo '')
+echo "GENERATION_ID=${GENERATION_ID:-<empty>}"
+TEST_COUNT=$(find "$AUTONOMA_ROOT/autonoma/qa-tests" -name '*.md' ! -name 'INDEX.md' 2>/dev/null | wc -l | tr -d ' ')
+[ -n "$GENERATION_ID" ] && curl -f -X POST "${AUTONOMA_API_URL}/v1/setup/setups/${GENERATION_ID}/events" \
+  -H "Authorization: Bearer ${AUTONOMA_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d "{\"type\":\"log\",\"data\":{\"message\":\"Generated ${TEST_COUNT} test cases. Uploading to dashboard...\"}}" || true
+
+[ -n "$GENERATION_ID" ] && curl -f -X POST "${AUTONOMA_API_URL}/v1/setup/setups/${GENERATION_ID}/events" \
+  -H "Authorization: Bearer ${AUTONOMA_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"step.completed","data":{"step":2,"name":"E2E Tests"}}' || true
+
+[ -n "$GENERATION_ID" ] && python3 -c "
+import os, json
+proj_root = open('/tmp/autonoma-project-root').read().strip() if os.path.exists('/tmp/autonoma-project-root') else '.'
+qa_dir = os.path.join(proj_root, 'autonoma/qa-tests')
+test_cases = []
+for root, dirs, files in os.walk(qa_dir):
+    for f in files:
+        if f.endswith('.md') and f != 'INDEX.md':
+            path = os.path.join(root, f)
+            folder = os.path.relpath(root, qa_dir)
+            with open(path) as fh:
+                content = fh.read()
+            entry = {'name': f, 'content': content}
+            if folder != '.':
+                entry['folder'] = folder
+            test_cases.append(entry)
+print(json.dumps({'testCases': test_cases}))
+" | curl -f -X POST "${AUTONOMA_API_URL}/v1/setup/setups/${GENERATION_ID}/artifacts" \
+  -H "Authorization: Bearer ${AUTONOMA_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d @- || true
+```
+
 4. Call `AskUserQuestion` with:
    - question: "Does this test distribution look correct? The total test count should roughly correlate with the number of routes/features in your app."
    - options: ["Yes, proceed to Step 4", "I want to suggest changes"]
 5. Wait for the user's response before proceeding.
-=======
-4. End your message with exactly this question: **"Does this test distribution look correct? The total test count should roughly correlate with the number of routes/features in your app. Please confirm or suggest changes before I proceed to Step 4."**
-5. **STOP. End your turn. Do NOT call any tools or spawn any agents. Wait for the user to reply.**
->>>>>>> main
 
 ## Step 4: Implement Environment Factory
+
+Report step start:
+```bash
+AUTONOMA_ROOT=$(cat /tmp/autonoma-project-root 2>/dev/null || echo '.')
+GENERATION_ID=$(cat "$AUTONOMA_ROOT/autonoma/.generation-id" 2>/dev/null || echo '')
+echo "GENERATION_ID=${GENERATION_ID:-<empty>}"
+[ -n "$GENERATION_ID" ] && curl -f -X POST "${AUTONOMA_API_URL}/v1/setup/setups/${GENERATION_ID}/events" \
+  -H "Authorization: Bearer ${AUTONOMA_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"step.started","data":{"step":3,"name":"Environment Factory"}}' || true
+[ -n "$GENERATION_ID" ] && curl -f -X POST "${AUTONOMA_API_URL}/v1/setup/setups/${GENERATION_ID}/events" \
+  -H "Authorization: Bearer ${AUTONOMA_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"log","data":{"message":"Implementing Environment Factory endpoint in your backend..."}}' || true
+```
 
 Spawn the `env-factory-generator` subagent with the following task:
 
@@ -126,6 +279,21 @@ Spawn the `env-factory-generator` subagent with the following task:
 1. Verify the endpoint was created and tests pass
 2. Present the results to the user — what was implemented, where, test results
 3. Report any issues that need manual attention
+
+Report step complete:
+```bash
+AUTONOMA_ROOT=$(cat /tmp/autonoma-project-root 2>/dev/null || echo '.')
+GENERATION_ID=$(cat "$AUTONOMA_ROOT/autonoma/.generation-id" 2>/dev/null || echo '')
+echo "GENERATION_ID=${GENERATION_ID:-<empty>}"
+[ -n "$GENERATION_ID" ] && curl -f -X POST "${AUTONOMA_API_URL}/v1/setup/setups/${GENERATION_ID}/events" \
+  -H "Authorization: Bearer ${AUTONOMA_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"log","data":{"message":"Environment Factory implemented and verified."}}' || true
+[ -n "$GENERATION_ID" ] && curl -f -X POST "${AUTONOMA_API_URL}/v1/setup/setups/${GENERATION_ID}/events" \
+  -H "Authorization: Bearer ${AUTONOMA_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"type":"step.completed","data":{"step":3,"name":"Environment Factory"}}' || true
+```
 
 ## Completion
 
