@@ -50,11 +50,11 @@ An `INDEX.md` tracks total test count, folder breakdown, and coverage correlatio
 
 **You review**: test distribution and coverage correlation. Test count should roughly match 3-5x your route/feature count.
 
-### Step 4: Environment Factory
+### Step 4: Scenario Validation
 
-Implements an endpoint in your backend that creates and tears down isolated test data for each scenario. Handles `discover`, `up`, and `down` actions with HMAC-SHA256 request signing and JWT-signed refs for safe teardown.
+Validates concrete scenario-generation recipes against your existing Environment Factory or installed SDK. Step 4 proves that each scenario can complete a full `up` → `down` lifecycle, then saves the approved recipes to `autonoma/scenario-recipes.json`.
 
-**You review**: implementation plan before any code is written. The endpoint never modifies existing data.
+**You review**: which validation path was used and whether `standard`, `empty`, and `large` all passed lifecycle validation.
 
 ## Validation
 
@@ -65,23 +65,18 @@ Every output file has YAML frontmatter validated by shell scripts (not prompts).
 | `AUTONOMA.md` | core_flows table, app description, feature/skill counts |
 | `discover.json` | SDK discover schema shape: models, edges, relations, scopeField |
 | `scenarios.md` | scenario count, required scenarios (standard/empty/large), entity types, discover metadata, variable fields |
+| `scenario-recipes.json` | validated recipe file, lifecycle method, required scenarios |
 | `INDEX.md` | test totals match folder sums, criticality counts sum correctly, test count within expected range |
 | Each test file | title, description, criticality (critical/high/mid/low), scenario, flow |
 
 ## Environment Variables (Step 4)
 
-Step 4 requires two secrets for the Environment Factory endpoint:
+Step 4 validates recipes against an existing Environment Factory. When endpoint validation is used,
+it requires:
 
 ```bash
-# Generate secrets
-openssl rand -hex 32  # AUTONOMA_SIGNING_SECRET
-openssl rand -hex 32  # AUTONOMA_JWT_SECRET
-```
-
-Add to your `.env`:
-```
-AUTONOMA_SIGNING_SECRET=<first-value>
-AUTONOMA_JWT_SECRET=<second-value>
+AUTONOMA_ENV_FACTORY_URL=<your endpoint url>
+AUTONOMA_SHARED_SECRET=<shared HMAC secret>
 ```
 
 ## Requirements
@@ -119,6 +114,7 @@ autonoma-test-planner/
 │   └── validators/
 │       ├── validate_kb.py
 │       ├── validate_discover.py
+│       ├── validate_scenario_recipes.py
 │       ├── validate_scenarios.py
 │       ├── validate_test_index.py
 │       └── validate_test_file.py

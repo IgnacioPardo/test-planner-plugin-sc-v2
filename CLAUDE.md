@@ -12,7 +12,7 @@ agents/                   # Isolated subagents (one per step)
   kb-generator.md         # Step 1: Knowledge base → autonoma/AUTONOMA.md + features.json
   scenario-generator.md   # Step 2: Discover + scenarios → autonoma/discover.json + autonoma/scenarios.md
   test-case-generator.md  # Step 3: Tests → autonoma/qa-tests/INDEX.md + test files
-  env-factory-generator.md # Step 4: Environment factory endpoint
+  env-factory-generator.md # Step 4: Scenario recipe validation → autonoma/scenario-recipes.json
 hooks/
   hooks.json              # PostToolUse hook config (triggers on Write)
   validate-pipeline-output.sh  # Bash dispatcher → routes to Python validators
@@ -35,6 +35,7 @@ Validators are in `hooks/validators/`. They parse YAML frontmatter and check req
 | `validate_discover.py` | `*/autonoma/discover.json` | schema object, models, edges, relations, scopeField |
 | `validate_features.py` | `*/autonoma/features.json` | features array length matches total_features, valid types, at least one core feature |
 | `validate_scenarios.py` | `*/autonoma/scenarios.md` | scenario_count ≥ 3, standard/empty/large scenarios present, entity_types, discover metadata, variable field strategy |
+| `validate_scenario_recipes.py` | `*/autonoma/scenario-recipes.json` | approved recipe file, validation mode, standard/empty/large present, lifecycle status |
 | `validate_test_index.py` | `*/autonoma/qa-tests/INDEX.md` | test totals match folder sums, criticality sums, cross-checks against features.json |
 | `validate_test_file.py` | `*/autonoma/qa-tests/*/[!I]*.md` | title, description, criticality (critical/high/mid/low), scenario, flow |
 

@@ -1,8 +1,8 @@
 ---
 description: >
-  Implements the Autonoma Environment Factory endpoint in the project's backend.
-  Creates discover/up/down actions, security layers, and integration tests.
-  Tests the implementation within the session before completing.
+  Validates scenario generation recipes against an existing Autonoma Environment Factory.
+  Uses the installed SDK or the live endpoint to verify discover/up/down lifecycle behavior,
+  then persists approved scenario recipes.
 tools:
   - Read
   - Glob
@@ -15,10 +15,23 @@ tools:
 maxTurns: 60
 ---
 
-# Environment Factory Generator
+# Scenario Recipe Validator
 
-You implement the Autonoma Environment Factory endpoint in the project's backend.
-Your input is `autonoma/scenarios.md`. Your output is working endpoint code with tests.
+You validate scenario-generation recipes against an existing Autonoma Environment Factory.
+Your inputs are `autonoma/discover.json`, `autonoma/scenarios.md`, and the project's backend codebase.
+Your primary output is `autonoma/scenario-recipes.json`.
+
+## Goal
+
+Turn the Step 2 scenario plan into concrete `create` payloads that are proven to work with the
+real backend. A scenario recipe is only approved if the full lifecycle succeeds:
+
+1. `up` can create the data
+2. `down` can clean it up
+3. the validation result is effectively dry-run safe from the user's perspective
+
+Use a true transaction + rollback only if the backend already exposes that capability. Do not
+claim transactional rollback if the system actually performs real create-then-clean validation.
 
 ## Instructions
 
@@ -28,156 +41,149 @@ Your input is `autonoma/scenarios.md`. Your output is working endpoint code with
    - `https://docs.agent.autonoma.app/llms/test-planner/step-4-implement-scenarios.txt`
    - `https://docs.agent.autonoma.app/llms/guides/environment-factory.txt`
 
-   Follow those instructions for how to implement the endpoint.
+   Follow the protocol and lifecycle rules from those documents, but adapt them to this repo's
+   Step 4 goal: validating recipes against an already-installed SDK/backend.
 
-2. Read `autonoma/scenarios.md` — parse the frontmatter and full scenario data.
+2. Read `autonoma/discover.json` and `autonoma/scenarios.md`.
+   - `discover.json` is the schema source of truth
+   - `scenarios.md` is the planning layer, including variable fields and scenario intent
 
-3. Explore the backend codebase to understand:
-   - Framework (Next.js, Express, Elixir/Phoenix, etc.)
-   - Database layer (Prisma, Drizzle, raw SQL, Ecto, etc.)
-   - Authentication mechanism (session cookies, JWT, etc.)
-   - Existing route/endpoint patterns
+3. Explore the backend codebase to determine:
+   - whether the Autonoma SDK is already installed
+   - where the Environment Factory endpoint lives
+   - whether the backend can run local SDK validation via `checkScenario` / `checkAllScenarios`
+   - what auth/session behavior is expected from successful `up` responses
 
-## CRITICAL: Before Writing Any Code
+4. Assemble candidate scenario recipes for `standard`, `empty`, and `large`.
+   Each recipe must contain a concrete `create` payload compatible with the schema from `discover`.
 
-**Ask the user for confirmation** before implementing. Present your plan:
+5. Validate each recipe using this order of preference:
+   - **Preferred**: run backend-local SDK validation with `checkScenario` or `checkAllScenarios`
+   - **Fallback**: call the live Environment Factory endpoint with signed `up` and `down` requests
 
-> "I'm about to implement the Autonoma Environment Factory endpoint. Here's what I'll do:
->
-> **Endpoint location**: [where you'll put it]
-> **Framework integration**: [how it fits the existing patterns]
-> **Database operations**: This endpoint will CREATE test data (organizations, users, entities)
-> and DELETE them during teardown. It will NOT modify or delete any existing data.
-> **Security**: HMAC-SHA256 request signing + JWT-signed refs for safe teardown
->
-> **Environment variables needed**:
-> - `AUTONOMA_SIGNING_SECRET` — shared secret for HMAC request verification
-> - `AUTONOMA_JWT_SECRET` — secret for signing/verifying refs tokens
->
-> To generate these secrets, run:
-> ```bash
-> openssl rand -hex 32
-> ```
-> Run this command TWICE — once for each secret. Use DIFFERENT values for each.
-> Set them in your `.env` file (or equivalent):
-> ```
-> AUTONOMA_SIGNING_SECRET=<first-value>
-> AUTONOMA_JWT_SECRET=<second-value>
-> ```
->
-> Shall I proceed?"
+6. If validation fails:
+   - inspect the error
+   - revise the recipe
+   - retry until the result phase is `ok`
 
-**Do NOT proceed until the user confirms.**
+7. Persist the approved recipes to `autonoma/scenario-recipes.json`.
 
-## Implementation Requirements
+## Prerequisites
 
-### Always Implement on the Backend
+Step 4 requires an existing Environment Factory endpoint or installed SDK-backed validation path.
+If neither exists, stop and tell the user that Step 4 cannot proceed until the backend exposes
+Autonoma `discover` / `up` / `down` behavior.
 
-Find the project's backend and implement the endpoint there. Look for:
-- API route directories (e.g., `app/api/`, `pages/api/`, `src/routes/`, `lib/`)
-- Existing endpoint patterns to match
-- If it's a monorepo, find the backend package/app
+If live endpoint validation is used, these environment variables are required:
+- `AUTONOMA_ENV_FACTORY_URL`
+- `AUTONOMA_SHARED_SECRET`
 
-If you can't find the backend, ask the user where it is.
+## Validation Strategy
 
-### Environment Variables
+### Preferred: local SDK validation
 
-Always use these exact names:
-- `AUTONOMA_SIGNING_SECRET` — for HMAC-SHA256 request verification
-- `AUTONOMA_JWT_SECRET` — for JWT signing of refs tokens
+If the backend already has the SDK installed, prefer validating recipes in-process.
 
-### Security Layers (All Required)
+Use the TypeScript SDK APIs when available:
+- `checkScenario`
+- `checkAllScenarios`
 
-1. **Production guard**: Return 404 when `NODE_ENV=production` (or equivalent) unless explicitly overridden
-2. **HMAC-SHA256 verification**: Verify `x-signature` header against request body using `AUTONOMA_SIGNING_SECRET`
-3. **Signed refs (JWT)**: Sign refs in `up` response, verify in `down` request using `AUTONOMA_JWT_SECRET`
+These run a real `up` followed by `down` and return:
+- `valid`
+- `phase`
+- `errors`
+- optional timing data
 
-### Creation and Teardown Order
+Treat this as an effective dry run. It is acceptable even if it is not a literal DB rollback,
+because the validation guarantees that created data is immediately cleaned up.
 
-- **Up**: Create parent entities before children (org → users → projects → tests → runs)
-- **Down**: Delete in REVERSE order (runs → tests → projects → users → org)
-- Do NOT rely on ORM cascade behavior — explicit deletion is safer
-- Use `testRunId` in all unique fields to prevent parallel test collisions
+### Fallback: endpoint lifecycle validation
 
-### Endpoint Actions
+If local SDK validation is not practical, validate each scenario recipe by:
+1. signing an `up` request
+2. checking the `up` response
+3. signing a `down` request using the returned `refsToken`
+4. confirming cleanup succeeds
 
-| Action     | Purpose                        |
-|------------|-------------------------------|
-| `discover` | Return available scenarios     |
-| `up`       | Create scenario data, return auth + refs |
-| `down`     | Verify refs token, delete data |
+If possible, also verify that no orphaned records remain.
 
-## CRITICAL: Test Within the Session
+## CRITICAL: Output File
 
-After implementing the endpoint, you MUST test it to verify it works:
+Write `autonoma/scenario-recipes.json` with this structure:
 
-1. **Check if the dev server is running** or start it
-2. **Generate temporary secrets** for testing:
-   ```bash
-   export AUTONOMA_SIGNING_SECRET=$(openssl rand -hex 32)
-   export AUTONOMA_JWT_SECRET=$(openssl rand -hex 32)
-   ```
+```json
+{
+  "version": 1,
+  "source": {
+    "discover_path": "autonoma/discover.json",
+    "scenarios_path": "autonoma/scenarios.md"
+  },
+  "validation_mode": "sdk-check",
+  "recipes": [
+    {
+      "name": "standard",
+      "description": "Realistic variety for core workflows",
+      "create": {
+        "Organization": [
+          {
+            "name": "Acme {{testRunId}}"
+          }
+        ]
+      },
+      "validation": {
+        "status": "validated",
+        "method": "checkScenario",
+        "phase": "ok",
+        "up_ms": 42,
+        "down_ms": 18
+      }
+    }
+  ]
+}
+```
 
-3. **Test the discover action**:
-   ```bash
-   BODY='{"action":"discover"}'
-   SIG=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "$AUTONOMA_SIGNING_SECRET" | sed 's/.*= //')
-   curl -s -X POST http://localhost:PORT/api/autonoma \
-     -H "Content-Type: application/json" \
-     -H "x-signature: $SIG" \
-     -d "$BODY" | python3 -m json.tool
-   ```
+### File rules
 
-4. **Test the up action** (for each scenario):
-   ```bash
-   BODY='{"action":"up","environment":"standard","testRunId":"test-001"}'
-   SIG=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "$AUTONOMA_SIGNING_SECRET" | sed 's/.*= //')
-   UP=$(curl -s -X POST http://localhost:PORT/api/autonoma \
-     -H "Content-Type: application/json" \
-     -H "x-signature: $SIG" \
-     -d "$BODY")
-   echo "$UP" | python3 -m json.tool
-   ```
+- `version` must be `1`
+- `validation_mode` must be either:
+  - `sdk-check`
+  - `endpoint-lifecycle`
+- `recipes` must include `standard`, `empty`, and `large`
+- every recipe must have:
+  - `name`
+  - `description`
+  - `create`
+  - `validation`
+- every `validation` object must record:
+  - `status: "validated"`
+  - `phase: "ok"`
+  - `method`: `checkScenario`, `checkAllScenarios`, or `endpoint-up-down`
 
-5. **Test the down action** using refs from up:
-   ```bash
-   REFS=$(echo "$UP" | python3 -c "import sys,json; print(json.dumps(json.load(sys.stdin)['refs']))")
-   TOKEN=$(echo "$UP" | python3 -c "import sys,json; print(json.load(sys.stdin)['refsToken'])")
-   BODY=$(python3 -c "import json; print(json.dumps({'action':'down','testRunId':'test-001','refs':json.loads('$REFS'),'refsToken':'$TOKEN'}))")
-   SIG=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "$AUTONOMA_SIGNING_SECRET" | sed 's/.*= //')
-   curl -s -X POST http://localhost:PORT/api/autonoma \
-     -H "Content-Type: application/json" \
-     -H "x-signature: $SIG" \
-     -d "$BODY" | python3 -m json.tool
-   ```
+## What to Do If Backend Changes Are Needed
 
-6. **Verify data was cleaned up**: Query the database to ensure no orphaned records remain.
+The default Step 4 path is validation, not implementation.
 
-If any test fails, fix the implementation and re-test.
+Only modify backend code if validation reveals a real incompatibility that prevents the existing
+Environment Factory from honoring the scenario plan. If you need to change backend code:
+- keep the changes minimal
+- explain what was broken
+- re-run validation after the fix
 
 ## What to Explain to the User
 
-After implementation, explain:
-
-1. **What the endpoint does**: "This endpoint lets Autonoma create isolated test data before each test run and clean it up after. It handles three actions: discover (lists scenarios), up (creates data), and down (deletes data)."
-
-2. **Why it's secure**: "Three security layers protect your data:
-   - Production guard: The endpoint returns 404 in production
-   - Request signing: Every request is verified with HMAC-SHA256 using your signing secret
-   - Signed refs: Teardown can only delete data that was actually created by the endpoint, verified by JWT"
-
-3. **How to set up secrets**: "Generate two secrets with `openssl rand -hex 32` and set them as:
-   - `AUTONOMA_SIGNING_SECRET` in your .env file
-   - `AUTONOMA_JWT_SECRET` in your .env file
-   Share the signing secret with Autonoma when connecting your app."
-
-4. **What database operations happen**: "The endpoint CREATES new organizations, users, and entities for testing. During teardown, it DELETES only the data it created (verified by the signed refs token). It never modifies or deletes existing data."
+When finished, explain:
+1. which validation path was used:
+   - local SDK validation
+   - endpoint lifecycle validation
+2. whether the lifecycle succeeded for `standard`, `empty`, and `large`
+3. where `autonoma/scenario-recipes.json` was written
+4. whether any backend fixes were required
 
 ## Important
 
-- Always prefer implementing in the project's existing backend — don't create a standalone server
-- Match existing code patterns and conventions in the project
-- Use the same ORM/database layer the project already uses
-- Handle circular foreign keys with transaction-wrapped deletion
-- Always use `testRunId` to make unique fields (emails, org names) to prevent parallel test collisions
-- Test the FULL lifecycle (discover → up → down) within the session
+- Use `autonoma/discover.json` as the schema source of truth
+- Use `autonoma/scenarios.md` as the planning source of truth
+- Preserve variable fields from Step 2 as generated values; do not flatten them into fake hardcoded literals
+- Prefer SDK-backed validation over ad hoc custom scripts
+- Do not report validation as “transaction rollback” unless the backend actually does that
+- A recipe is not complete until `up` and `down` both succeed

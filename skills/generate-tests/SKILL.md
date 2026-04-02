@@ -119,6 +119,8 @@ This step requires these environment variables:
 - `AUTONOMA_SHARED_SECRET` — the HMAC shared secret used by the SDK endpoint
 
 If either variable is missing, stop and tell the user that Step 2 now requires SDK discover access.
+Do not suggest skipping to Step 4, reordering the pipeline, or continuing without a working Environment Factory endpoint.
+State plainly that the endpoint and both environment variables are mandatory prerequisites for Step 2.
 
 Fetch and validate the artifact:
 ```bash
@@ -138,6 +140,9 @@ fi
 printf '%s\n' "$DISCOVER_BODY" > autonoma/discover.json
 python3 hooks/validators/validate_discover.py autonoma/discover.json
 ```
+
+If the fetch fails or validation fails, stop the pipeline at Step 2.
+Do not suggest skipping ahead. Tell the user to provide a working Environment Factory endpoint and correct shared secret, then rerun the command.
 
 Spawn the `scenario-generator` subagent with the following task:
 
@@ -229,7 +234,7 @@ print(json.dumps({'testCases': test_cases}))
    - options: ["Yes, proceed to Step 4", "I want to suggest changes"]
 5. Wait for the user's response before proceeding.
 
-## Step 4: Implement Environment Factory
+## Step 4: Validate Scenario Recipes
 
 Report step start:
 ```bash
@@ -237,22 +242,26 @@ GENERATION_ID=$(cat autonoma/.generation-id 2>/dev/null || echo '')
 [ -n "$GENERATION_ID" ] && curl -sf -X POST "${AUTONOMA_API_URL}/v1/generation/generations/${GENERATION_ID}/events" \
   -H "Authorization: Bearer ${AUTONOMA_API_KEY}" \
   -H "Content-Type: application/json" \
-  -d '{"type":"step.started","data":{"step":3,"name":"Environment Factory"}}' 2>/dev/null || true
+  -d '{"type":"step.started","data":{"step":3,"name":"Scenario Validation"}}' 2>/dev/null || true
 ```
 
 Spawn the `env-factory-generator` subagent with the following task:
 
-> Read the scenarios from `autonoma/scenarios.md` and implement the Autonoma Environment Factory
-> endpoint in the project's backend. The endpoint handles discover/up/down actions.
+> Read `autonoma/discover.json` and `autonoma/scenarios.md`.
+> Validate concrete scenario-generation recipes against the existing Autonoma Environment Factory
+> or installed SDK in the project's backend.
 > Fetch the latest instructions from https://docs.agent.autonoma.app/llms/test-planner/step-4-implement-scenarios.txt
 > and https://docs.agent.autonoma.app/llms/guides/environment-factory.txt first.
-> After implementing, run integration tests to verify the endpoint works.
-> Use AUTONOMA_SIGNING_SECRET and AUTONOMA_JWT_SECRET as environment variable names.
+> Write the approved recipes to `autonoma/scenario-recipes.json`.
+> Prefer SDK-backed `checkScenario` / `checkAllScenarios` validation. If that is not practical,
+> validate the real `up` / `down` lifecycle through the Environment Factory endpoint.
+> If validation fails, revise the recipe and retry until the lifecycle succeeds.
 
 **After the subagent completes:**
-1. Verify the endpoint was created and tests pass
-2. Present the results to the user — what was implemented, where, test results
-3. Report any issues that need manual attention
+1. Verify `autonoma/scenario-recipes.json` exists and is non-empty
+2. The PostToolUse hook will have validated the recipe file automatically
+3. Present the results to the user — validation path used, recipe names, and per-scenario lifecycle results
+4. Report any backend issues that still need manual attention
 
 Report step complete:
 ```bash
@@ -260,7 +269,7 @@ GENERATION_ID=$(cat autonoma/.generation-id 2>/dev/null || echo '')
 [ -n "$GENERATION_ID" ] && curl -sf -X POST "${AUTONOMA_API_URL}/v1/generation/generations/${GENERATION_ID}/events" \
   -H "Authorization: Bearer ${AUTONOMA_API_KEY}" \
   -H "Content-Type: application/json" \
-  -d '{"type":"step.completed","data":{"step":3,"name":"Environment Factory"}}' 2>/dev/null || true
+  -d '{"type":"step.completed","data":{"step":3,"name":"Scenario Validation"}}' 2>/dev/null || true
 ```
 
 ## Completion
@@ -269,4 +278,4 @@ After all steps complete, summarize:
 - **Step 1**: Knowledge base location and core flow count
 - **Step 2**: Scenario count and entity types covered
 - **Step 3**: Total test count, folder breakdown, coverage correlation
-- **Step 4**: Endpoint location, test results, env var setup instructions
+- **Step 4**: Scenario recipe file location, validation path, and per-scenario lifecycle results

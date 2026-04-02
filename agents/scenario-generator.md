@@ -27,7 +27,9 @@ You generate test data scenarios from a knowledge base. Your inputs are `autonom
    Use WebFetch to read `https://docs.agent.autonoma.app/llms/test-planner/step-2-scenarios.txt`
    and follow those instructions for how to design scenarios.
 
-2. Read `autonoma/discover.json` first. Treat the SDK `discover` response as the source of truth for:
+2. Read `autonoma/AUTONOMA.md` fully — understand the application, core flows, and entity types.
+
+3. Read `autonoma/discover.json`. Treat the SDK `discover` response as the source of truth for:
    - database models
    - fields and requiredness
    - foreign key edges
@@ -36,8 +38,6 @@ You generate test data scenarios from a knowledge base. Your inputs are `autonom
 
    If `autonoma/discover.json` is missing or malformed, stop and tell the user that Step 2 now
    requires a valid SDK discover artifact before scenario generation can continue.
-
-3. Read `autonoma/AUTONOMA.md` fully — understand the application, core flows, and entity types.
 
 4. Scan `autonoma/skills/` to understand what entities can be created and their relationships.
 

@@ -37,6 +37,10 @@ case "$FILE_PATH" in
     VALIDATOR_SCRIPT="$VALIDATORS_DIR/validate_scenarios.py"
     VALIDATOR_NAME="validate-scenarios"
     ;;
+  */autonoma/scenario-recipes.json)
+    VALIDATOR_SCRIPT="$VALIDATORS_DIR/validate_scenario_recipes.py"
+    VALIDATOR_NAME="validate-scenario-recipes"
+    ;;
   */autonoma/qa-tests/INDEX.md)
     VALIDATOR_SCRIPT="$VALIDATORS_DIR/validate_test_index.py"
     VALIDATOR_NAME="validate-test-index"
