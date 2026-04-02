@@ -38,9 +38,9 @@ Analyzes your frontend codebase and produces `autonoma/AUTONOMA.md` — a user-p
 
 ### Step 2: Scenarios
 
-Reads the knowledge base and your backend data model to design three test data environments: `standard` (realistic variety), `empty` (empty states), and `large` (pagination/performance). Outputs `autonoma/scenarios.md` with frontmatter summarizing each scenario.
+Reads the knowledge base and the SDK `discover` response from your backend Environment Factory to design three test data environments: `standard` (realistic variety), `empty` (empty states), and `large` (pagination/performance). Outputs `autonoma/discover.json` plus `autonoma/scenarios.md`, preserving the legacy scenario summary while adding schema metadata and variable-field planning.
 
-**You review**: entity names, counts, and relationships. These become hard assertions in your tests.
+**You review**: entity names, counts, relationships, and which values must stay generated. Fixed values become hard assertions; variable fields are explicitly marked for later test generation.
 
 ### Step 3: E2E Tests
 
@@ -63,7 +63,8 @@ Every output file has YAML frontmatter validated by shell scripts (not prompts).
 | File | What's validated |
 |------|-----------------|
 | `AUTONOMA.md` | core_flows table, app description, feature/skill counts |
-| `scenarios.md` | scenario count, required scenarios (standard/empty/large), entity types |
+| `discover.json` | SDK discover schema shape: models, edges, relations, scopeField |
+| `scenarios.md` | scenario count, required scenarios (standard/empty/large), entity types, discover metadata, variable fields |
 | `INDEX.md` | test totals match folder sums, criticality counts sum correctly, test count within expected range |
 | Each test file | title, description, criticality (critical/high/mid/low), scenario, flow |
 
@@ -117,6 +118,7 @@ autonoma-test-planner/
 │   ├── validate-pipeline-output.sh     # Validation dispatcher
 │   └── validators/
 │       ├── validate_kb.py
+│       ├── validate_discover.py
 │       ├── validate_scenarios.py
 │       ├── validate_test_index.py
 │       └── validate_test_file.py

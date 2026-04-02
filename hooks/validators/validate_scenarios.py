@@ -26,7 +26,7 @@ if not isinstance(fm, dict):
     sys.exit(1)
 
 # Required fields
-required = ['scenario_count', 'scenarios', 'entity_types']
+required = ['scenario_count', 'scenarios', 'entity_types', 'discover', 'variable_fields']
 missing = [f for f in required if f not in fm]
 if missing:
     print(f'Missing required frontmatter fields: {missing}')
@@ -71,6 +71,84 @@ if not isinstance(et, list) or len(et) == 0:
 for i, e in enumerate(et):
     if not isinstance(e, dict) or 'name' not in e:
         print(f'entity_types[{i}] must be a mapping with at least a "name" field')
+        sys.exit(1)
+
+# Validate discover metadata
+discover = fm.get('discover')
+if not isinstance(discover, dict):
+    print('discover must be a mapping')
+    sys.exit(1)
+
+for field in ['source', 'model_count', 'edge_count', 'relation_count', 'scope_field']:
+    if field not in discover:
+        print(f'discover missing required field: {field}')
+        sys.exit(1)
+
+if discover.get('source') != 'sdk':
+    print('discover.source must be exactly "sdk"')
+    sys.exit(1)
+
+for field in ['model_count', 'edge_count', 'relation_count']:
+    value = discover.get(field)
+    if not isinstance(value, int) or value < 0:
+        print(f'discover.{field} must be a non-negative integer')
+        sys.exit(1)
+
+scope_field = discover.get('scope_field')
+if not isinstance(scope_field, str) or len(scope_field.strip()) == 0:
+    print('discover.scope_field must be a non-empty string')
+    sys.exit(1)
+
+if discover.get('model_count') == 0:
+    print('discover.model_count must be greater than 0')
+    sys.exit(1)
+
+# Validate variable_fields
+variable_fields = fm.get('variable_fields')
+if not isinstance(variable_fields, list):
+    print('variable_fields must be a list')
+    sys.exit(1)
+
+for i, variable in enumerate(variable_fields):
+    if not isinstance(variable, dict):
+        print(f'variable_fields[{i}] must be a mapping')
+        sys.exit(1)
+    for field in ['token', 'entity', 'scenarios', 'generator', 'reason', 'test_reference']:
+        if field not in variable:
+            print(f'variable_fields[{i}] missing required field: {field}')
+            sys.exit(1)
+
+    token = variable.get('token')
+    if not isinstance(token, str) or len(token) < 3 or not token.startswith('<') or not token.endswith('>'):
+        print(f'variable_fields[{i}].token must use angle brackets, e.g. <title>')
+        sys.exit(1)
+
+    for field in ['entity', 'generator', 'reason', 'test_reference']:
+        value = variable.get(field)
+        if not isinstance(value, str) or len(value.strip()) == 0:
+            print(f'variable_fields[{i}].{field} must be a non-empty string')
+            sys.exit(1)
+
+    scenario_names = variable.get('scenarios')
+    if not isinstance(scenario_names, list) or len(scenario_names) == 0:
+        print(f'variable_fields[{i}].scenarios must be a non-empty list')
+        sys.exit(1)
+    unknown_names = [name for name in scenario_names if name not in found_names]
+    if unknown_names:
+        print(f'variable_fields[{i}].scenarios has unknown scenario names: {unknown_names}')
+        sys.exit(1)
+
+# Validate required body sections
+body = parts[2]
+required_sections = [
+    '## SDK Discover',
+    '## Schema Summary',
+    '## Relationship Map',
+    '## Variable Data Strategy',
+]
+for section in required_sections:
+    if section not in body:
+        print(f'Missing required section in body: {section}')
         sys.exit(1)
 
 print('OK')

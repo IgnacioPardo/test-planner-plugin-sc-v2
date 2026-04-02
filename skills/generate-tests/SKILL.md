@@ -113,17 +113,47 @@ GENERATION_ID=$(cat autonoma/.generation-id 2>/dev/null || echo '')
   -d '{"type":"step.started","data":{"step":1,"name":"Scenarios"}}' 2>/dev/null || true
 ```
 
+Before spawning the Step 2 subagent, fetch the SDK discover artifact and save it to `autonoma/discover.json`.
+This step requires these environment variables:
+- `AUTONOMA_ENV_FACTORY_URL` — full URL of the customer's Environment Factory endpoint
+- `AUTONOMA_SHARED_SECRET` — the HMAC shared secret used by the SDK endpoint
+
+If either variable is missing, stop and tell the user that Step 2 now requires SDK discover access.
+
+Fetch and validate the artifact:
+```bash
+mkdir -p autonoma
+BODY='{"action":"discover"}'
+SIG=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "$AUTONOMA_SHARED_SECRET" | sed 's/.*= //')
+RESPONSE=$(curl -sS -w "\nHTTP_STATUS:%{http_code}" -X POST "$AUTONOMA_ENV_FACTORY_URL" \
+  -H "Content-Type: application/json" \
+  -H "x-signature: $SIG" \
+  -d "$BODY")
+HTTP_STATUS=$(echo "$RESPONSE" | grep -o "HTTP_STATUS:[0-9]*" | cut -d: -f2)
+DISCOVER_BODY=$(echo "$RESPONSE" | sed '/HTTP_STATUS:/d')
+if [ "$HTTP_STATUS" != "200" ]; then
+  echo "SDK discover failed (HTTP $HTTP_STATUS): $DISCOVER_BODY"
+  exit 1
+fi
+printf '%s\n' "$DISCOVER_BODY" > autonoma/discover.json
+python3 hooks/validators/validate_discover.py autonoma/discover.json
+```
+
 Spawn the `scenario-generator` subagent with the following task:
 
-> Read the knowledge base from `autonoma/AUTONOMA.md` and `autonoma/skills/`.
+> Read the knowledge base from `autonoma/AUTONOMA.md`, `autonoma/skills/`, and the SDK discover
+> artifact from `autonoma/discover.json`.
 > Generate test data scenarios. Write the output to `autonoma/scenarios.md`.
-> The file MUST have YAML frontmatter with scenario_count, scenarios summary, and entity_types.
+> The file MUST have YAML frontmatter with scenario_count, scenarios summary, entity_types,
+> discover metadata, and variable_fields.
 > Fetch the latest instructions from https://docs.agent.autonoma.app/llms/test-planner/step-2-scenarios.txt first.
 
 **After the subagent completes:**
-1. Verify `autonoma/scenarios.md` exists and is non-empty
-2. The PostToolUse hook will have validated the frontmatter format automatically
-3. Read the file and present the frontmatter summary to the user — scenario names, entity counts, entity types
+1. Verify `autonoma/discover.json` and `autonoma/scenarios.md` exist and are non-empty
+2. Validate `autonoma/discover.json` with `hooks/validators/validate_discover.py`
+3. The PostToolUse hook will have validated the frontmatter format automatically
+4. Read the file and present the frontmatter summary to the user — scenario names, entity counts,
+   entity types, discover schema counts, and variable field tokens
 
 Report step complete:
 ```bash
@@ -135,7 +165,7 @@ GENERATION_ID=$(cat autonoma/.generation-id 2>/dev/null || echo '')
 ```
 
 4. Call `AskUserQuestion` with:
-   - question: "Do these scenarios look correct? The standard scenario data becomes hard assertions in your tests."
+   - question: "Do these scenarios look correct? Fixed scenario values become hard assertions, while variable fields must stay dynamic in later tests."
    - options: ["Yes, proceed to Step 3", "I want to suggest changes"]
 5. Wait for the user's response before proceeding.
 
