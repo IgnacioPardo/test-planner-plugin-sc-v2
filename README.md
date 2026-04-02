@@ -1,6 +1,6 @@
 # Autonoma Test Planner
 
-A Claude Code plugin that generates comprehensive E2E test suites for your codebase through a validated 5-step pipeline.
+A Claude Code plugin that generates comprehensive E2E test suites for your codebase through a validated 4-step pipeline.
 
 Each step runs in an isolated subagent with deterministic validation — shell scripts check the output format before the pipeline advances. No hallucinated validations, no cascading errors.
 
@@ -26,7 +26,7 @@ Inside any project with Claude Code:
 /autonoma-test-planner:generate-tests
 ```
 
-The plugin walks you through 5 steps. It stops for review after Steps 1-3, then runs Steps 4 and 5 together as one combined final phase.
+The plugin walks you through 4 steps, asking for confirmation at each checkpoint before proceeding.
 
 ## How it works
 
@@ -52,15 +52,9 @@ An `INDEX.md` tracks total test count, folder breakdown, and coverage correlatio
 
 ### Step 4: Environment Factory
 
-Implements or completes the backend Environment Factory so the planned scenarios can actually be created and torn down through the current SDK contract. Step 4 focuses on backend wiring: `discover`, `up`, `down`, request signing, refs signing, and a smoke-tested lifecycle.
+Implements or completes the backend Environment Factory so the planned scenarios can actually be created and torn down through the current SDK contract. Step 4 includes backend wiring plus validation: `discover`, `up`, `down`, request signing, refs signing, a smoke-tested lifecycle, and validation of the planned scenarios with `autonoma/scenario-recipes.json`.
 
-**You review**: where the Environment Factory lives, what changed, and whether a smoke `discover` → `up` → `down` check passed.
-
-### Step 5: Scenario Validation
-
-Validates concrete scenario-generation recipes against your existing Environment Factory or installed SDK. Step 5 proves that each planned scenario can complete a full `up` → `down` lifecycle, then saves the approved recipes to `autonoma/scenario-recipes.json`.
-
-**You review**: which validation path was used and whether `standard`, `empty`, and `large` all passed lifecycle validation.
+**You review**: where the Environment Factory lives, what changed, whether a smoke `discover` → `up` → `down` check passed, and whether `standard`, `empty`, and `large` all passed lifecycle validation.
 
 ## Validation
 
@@ -77,7 +71,7 @@ Every output file has YAML frontmatter validated by shell scripts (not prompts).
 
 ## Environment Variables
 
-Step 2 and Step 5 use the live Environment Factory endpoint when fetching `discover` or validating through HTTP:
+Step 2 and Step 4 use the live Environment Factory endpoint when fetching `discover` or validating through HTTP:
 
 ```bash
 AUTONOMA_ENV_FACTORY_URL=<your endpoint url>
@@ -119,8 +113,7 @@ autonoma-test-planner/
 │   ├── kb-generator.md                 # Step 1 subagent
 │   ├── scenario-generator.md           # Step 2 subagent
 │   ├── test-case-generator.md          # Step 3 subagent
-│   ├── env-factory-generator.md        # Step 4 subagent
-│   └── scenario-validator.md          # Step 5 subagent
+│   └── env-factory-generator.md        # Step 4 subagent
 ├── hooks/
 │   ├── hooks.json                      # PostToolUse hook config
 │   ├── validate-pipeline-output.sh     # Validation dispatcher

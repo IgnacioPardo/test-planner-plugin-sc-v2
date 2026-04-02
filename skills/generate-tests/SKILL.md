@@ -9,7 +9,7 @@ description: >
 
 # Autonoma E2E Test Generation Pipeline
 
-You are orchestrating a 5-step test generation pipeline. Each step runs as an isolated subagent.
+You are orchestrating a 4-step test generation pipeline. Each step runs as an isolated subagent.
 **Every step MUST complete successfully and pass validation before the next step begins.**
 Do NOT skip steps. Do NOT proceed if validation fails.
 
@@ -234,7 +234,7 @@ print(json.dumps({'testCases': test_cases}))
    - options: ["Yes, proceed to Step 4", "I want to suggest changes"]
 5. Wait for the user's response before proceeding.
 
-## Step 4: Implement Environment Factory
+## Step 4: Environment Factory
 
 Report step start:
 ```bash
@@ -249,18 +249,21 @@ Spawn the `env-factory-generator` subagent with the following task:
 
 > Read `autonoma/discover.json` and `autonoma/scenarios.md`.
 > Implement or complete the Autonoma Environment Factory in the project's backend so it can
-> support the planned scenarios with the current SDK contract.
+> support the planned scenarios with the current SDK contract, then validate the planned scenarios
+> against that implementation.
 > Fetch the latest instructions from https://docs.agent.autonoma.app/llms/test-planner/step-4-implement-scenarios.txt
 > and https://docs.agent.autonoma.app/llms/guides/environment-factory.txt first.
 > Preserve the existing discover integration if it already works, and finish `up` / `down`
 > behavior using `AUTONOMA_SHARED_SECRET` and `AUTONOMA_SIGNING_SECRET`.
 > Smoke-test the discover -> up -> down lifecycle in-session after implementing.
+> Then validate `standard`, `empty`, and `large`, and write approved recipes to `autonoma/scenario-recipes.json`.
 
 **After the subagent completes:**
 1. Verify the backend implementation or integration changes were made
-2. Present the results to the user — endpoint location, what was implemented or fixed, and smoke-test results
-3. Report which environment variables the backend now requires
-4. Report any backend issues that still need manual attention
+2. Verify `autonoma/scenario-recipes.json` exists and is non-empty
+3. Present the results to the user — endpoint location, what was implemented or fixed, smoke-test results, and per-scenario lifecycle results
+4. Report which environment variables the backend now requires
+5. Report any backend issues that still need manual attention
 
 Report step complete:
 ```bash
@@ -271,50 +274,10 @@ GENERATION_ID=$(cat autonoma/.generation-id 2>/dev/null || echo '')
   -d '{"type":"step.completed","data":{"step":3,"name":"Environment Factory"}}' 2>/dev/null || true
 ```
 
-## Step 5: Validate Scenarios
-
-Report step start:
-```bash
-GENERATION_ID=$(cat autonoma/.generation-id 2>/dev/null || echo '')
-[ -n "$GENERATION_ID" ] && curl -sf -X POST "${AUTONOMA_API_URL}/v1/generation/generations/${GENERATION_ID}/events" \
-  -H "Authorization: Bearer ${AUTONOMA_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{"type":"step.started","data":{"step":4,"name":"Validate Scenarios"}}' 2>/dev/null || true
-```
-
-Spawn the `scenario-validator` subagent with the following task:
-
-> Read `autonoma/discover.json` and `autonoma/scenarios.md`.
-> Validate concrete scenario-generation recipes against the existing Autonoma Environment Factory
-> or installed SDK in the project's backend.
-> Fetch the latest instructions from https://docs.agent.autonoma.app/llms/guides/environment-factory.txt first.
-> Write the approved recipes to `autonoma/scenario-recipes.json`.
-> Prefer SDK-backed `checkScenario` / `checkAllScenarios` validation. If that is not practical,
-> validate the real `up` / `down` lifecycle through the Environment Factory endpoint.
-> If validation fails, revise the recipe and retry until the lifecycle succeeds.
-
-**After the subagent completes:**
-1. Verify `autonoma/scenario-recipes.json` exists and is non-empty
-2. The PostToolUse hook will have validated the recipe file automatically
-3. Present the results to the user — validation path used, recipe names, and per-scenario lifecycle results
-4. Report any backend issues that still need manual attention
-
-Report step complete:
-```bash
-GENERATION_ID=$(cat autonoma/.generation-id 2>/dev/null || echo '')
-[ -n "$GENERATION_ID" ] && curl -sf -X POST "${AUTONOMA_API_URL}/v1/generation/generations/${GENERATION_ID}/events" \
-  -H "Authorization: Bearer ${AUTONOMA_API_KEY}" \
-  -H "Content-Type: application/json" \
-  -d '{"type":"step.completed","data":{"step":4,"name":"Validate Scenarios"}}' 2>/dev/null || true
-```
-
 ## Completion
 
 After all steps complete, summarize:
 - **Step 1**: Knowledge base location and core flow count
 - **Step 2**: Scenario count and entity types covered
 - **Step 3**: Total test count, folder breakdown, coverage correlation
-- **Step 4**: Environment Factory location, backend changes, smoke-test results, and required secrets
-- **Step 5**: Scenario recipe file location, validation path, and per-scenario lifecycle results
-
-Step 4 and Step 5 are one combined final phase: after the Environment Factory is ready, the pipeline should immediately continue into scenario validation without stopping for another user checkpoint.
+- **Step 4**: Environment Factory location, backend changes, smoke-test results, required secrets, and per-scenario lifecycle results

@@ -2,7 +2,7 @@
 description: >
   Implements or completes the Autonoma Environment Factory in the project's backend.
   Extends an existing SDK integration when possible, wires discover/up/down behavior to the
-  planned scenarios, and smoke-tests the lifecycle before completing.
+  planned scenarios, then validates the planned scenarios against the lifecycle before completing.
 tools:
   - Read
   - Glob
@@ -19,20 +19,21 @@ maxTurns: 60
 
 You implement or complete the Autonoma Environment Factory in the project's backend.
 Your inputs are `autonoma/discover.json`, `autonoma/scenarios.md`, and the backend codebase.
-Your output is working backend code and tests for the Environment Factory.
+Your output is working backend code plus validated scenario recipes.
 
 ## Goal
 
 Step 2 already proved that the backend can answer `discover`, or at least that there is enough
 of an Environment Factory integration to expose schema metadata. Step 4's job is to finish the
-real backend implementation for scenario creation and teardown:
+real backend implementation for scenario creation and teardown, then validate the planned scenarios
+against that implementation:
 
 1. make sure the backend exposes the current SDK protocol
 2. make sure `up` can create scenario data from inline `create` recipes
 3. make sure `down` can delete only the data created by `up`
 4. smoke-test the lifecycle in-session
-
-Full per-scenario recipe validation belongs to Step 5. Step 4 should make the backend ready for it.
+5. validate `standard`, `empty`, and `large`
+6. persist approved recipes to `autonoma/scenario-recipes.json`
 
 ## Instructions
 
@@ -64,7 +65,7 @@ Ask the user for confirmation before implementing. Present a short plan:
 >
 > **Endpoint location**: [route / handler path]
 > **Current state**: [what already exists vs what is missing]
-> **Step 4 scope**: make discover/up/down work with the current SDK contract so Step 5 can validate scenarios
+> **Step 4 scope**: make discover/up/down work with the current SDK contract and validate the planned scenarios against it
 > **Database operations**: `up` will create isolated test data and `down` will delete only those created refs
 > **Security**: HMAC-SHA256 request signing with `AUTONOMA_SHARED_SECRET` plus signed refs tokens with `AUTONOMA_SIGNING_SECRET`
 >
@@ -113,7 +114,7 @@ Required protections:
 - Prefer explicit create and teardown ordering based on the schema
 - If `discover` already works but `up` / `down` do not, keep the introspection path and finish the lifecycle
 
-## CRITICAL: Smoke-Test Within the Session
+## CRITICAL: Smoke-Test and Validate Within the Session
 
 After implementing, test the lifecycle in-session.
 
@@ -123,8 +124,12 @@ At minimum:
 3. send the corresponding signed `down` request using the returned `refsToken`
 4. verify cleanup succeeds
 
-This is a smoke test for the Environment Factory wiring. Full validation of `standard`, `empty`,
-and `large` belongs to Step 5.
+After the wiring works, validate `standard`, `empty`, and `large` against the backend.
+Prefer:
+1. backend-local `checkScenario` / `checkAllScenarios`
+2. signed endpoint `up` / `down` validation if local SDK checks are not practical
+
+Write the approved results to `autonoma/scenario-recipes.json`.
 
 If any smoke test fails, fix the implementation and re-test.
 
@@ -137,12 +142,13 @@ When finished, explain:
    - `AUTONOMA_SHARED_SECRET`
    - `AUTONOMA_SIGNING_SECRET`
 4. what smoke tests were run and whether the lifecycle succeeded
-5. that Step 5 should now validate the concrete scenarios against this implementation
+5. whether `standard`, `empty`, and `large` validated successfully
+6. where `autonoma/scenario-recipes.json` was written
 
 ## Important
 
 - Do not remove or rewrite existing working discover logic just because Step 2 now consumes it
 - Treat `discover.json` as the schema contract and `scenarios.md` as the scenario intent
-- Step 4 is implementation and backend integration, not full recipe approval
+- Step 4 is both Environment Factory implementation/integration and scenario validation
 - Keep backend changes minimal and consistent with the repo's style
 - Do not claim rollback semantics unless the backend actually implements rollback
