@@ -46,10 +46,10 @@ You generate test data scenarios from a knowledge base. Your inputs are `autonom
 6. Prefer hardcoded values when they make the resulting tests simpler and stable. For fields that are likely
    to require uniqueness, timestamps, or per-run generation, mark them as variable instead of pretending they
    are hardcoded. Every variable field must have:
-   - an angle-bracket token such as `<project_title>`
+   - a double-curly token such as `{{project_title}}`
    - the entity field it belongs to, such as `Project.title`
    - a generator hint such as `faker.company.name`
-   - a plain-language test reference such as `(<project_title> variable)`
+   - a plain-language test reference such as `({{project_title}} variable)`
 
 7. Write the output to `autonoma/scenarios.md`.
 
@@ -86,14 +86,14 @@ discover:
   relation_count: 16
   scope_field: "organizationId"
 variable_fields:
-  - token: "<project_title>"
+  - token: "{{project_title}}"
     entity: "Project.title"
     scenarios:
       - standard
       - large
     generator: "faker.company.name"
     reason: "title must be unique per test run"
-    test_reference: "(<project_title> variable)"
+    test_reference: "({{project_title}} variable)"
 ---
 ```
 
@@ -113,7 +113,7 @@ variable_fields:
   - `scope_field`: scope field name from `autonoma/discover.json`
 - **variable_fields**: List of generated or per-run values that tests must not treat as hardcoded literals.
   Each entry has:
-  - `token`: angle-bracket placeholder such as `<project_title>`
+  - `token`: double-curly placeholder such as `{{project_title}}`
   - `entity`: entity field path such as `Project.title`
   - `scenarios`: list of scenario names that use this variable
   - `generator`: generator hint such as `faker.company.name`
@@ -144,7 +144,7 @@ The validation checks:
 - Each scenario has name, description, entity_types, total_entities
 - entity_types is a non-empty list with name fields
 - discover includes sdk source, schema counts, and scope field
-- variable_fields entries use angle-bracket tokens and known scenario names
+- variable_fields entries use double-curly tokens and known scenario names
 - body includes SDK Discover, Schema Summary, Relationship Map, and Variable Data Strategy sections
 
 ## Important

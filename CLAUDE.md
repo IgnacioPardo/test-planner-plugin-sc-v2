@@ -1,18 +1,19 @@
 # Autonoma Test Planner Plugin
 
-Claude Code plugin that generates E2E test suites through a 4-step deterministic pipeline.
+Claude Code plugin that generates E2E test suites through a 5-step deterministic pipeline.
 
 ## Project Structure
 
 ```
 .claude-plugin/           # Plugin manifest (plugin.json, marketplace.json)
-commands/generate-tests.md  # Entry point — dispatches the 4-step pipeline
+commands/generate-tests.md  # Entry point — dispatches the 5-step pipeline
 skills/generate-tests/SKILL.md  # Orchestrator skill
 agents/                   # Isolated subagents (one per step)
   kb-generator.md         # Step 1: Knowledge base → autonoma/AUTONOMA.md + features.json
   scenario-generator.md   # Step 2: Discover + scenarios → autonoma/discover.json + autonoma/scenarios.md
   test-case-generator.md  # Step 3: Tests → autonoma/qa-tests/INDEX.md + test files
-  env-factory-generator.md # Step 4: Scenario recipe validation → autonoma/scenario-recipes.json
+  env-factory-generator.md # Step 4: Environment Factory implementation/integration
+  scenario-validator.md   # Step 5: Scenario recipe validation → autonoma/scenario-recipes.json
 hooks/
   hooks.json              # PostToolUse hook config (triggers on Write)
   validate-pipeline-output.sh  # Bash dispatcher → routes to Python validators
@@ -23,7 +24,7 @@ hooks/
 
 Each step spawns an isolated subagent. After each Write, the PostToolUse hook in `hooks/hooks.json` runs `validate-pipeline-output.sh`, which pattern-matches the file path and runs the appropriate Python validator. Validators exit 0 (OK) or 2 (block with error message).
 
-Steps 1-3 require user confirmation before advancing. Step 4 is the final step (no gate).
+Steps 1-3 require user confirmation before advancing. Steps 4 and 5 run as one combined final phase with no extra checkpoint between them.
 
 ## Validation
 

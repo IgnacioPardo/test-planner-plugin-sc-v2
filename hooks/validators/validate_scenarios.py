@@ -119,8 +119,8 @@ for i, variable in enumerate(variable_fields):
             sys.exit(1)
 
     token = variable.get('token')
-    if not isinstance(token, str) or len(token) < 3 or not token.startswith('<') or not token.endswith('>'):
-        print(f'variable_fields[{i}].token must use angle brackets, e.g. <title>')
+    if not isinstance(token, str) or len(token) < 5 or not token.startswith('{{') or not token.endswith('}}'):
+        print(f'variable_fields[{i}].token must use double curly braces, e.g. {{title}}')
         sys.exit(1)
 
     for field in ['entity', 'generator', 'reason', 'test_reference']:

@@ -29,14 +29,14 @@ discover:
   relation_count: 2
   scope_field: organizationId
 variable_fields:
-  - token: <project_title>
+  - token: "{{project_title}}"
     entity: Project.title
     scenarios:
       - standard
       - large
     generator: faker.company.name
     reason: title must be unique per test run
-    test_reference: (<project_title> variable)
+    test_reference: ({{project_title}} variable)
 ---
 
 # Scenarios
@@ -56,7 +56,7 @@ Models: 4
 
 ## Variable Data Strategy
 
-- `<project_title>` is generated.
+- `{{project_title}}` is generated.
 
 ## Scenario: `standard`
 
@@ -160,11 +160,11 @@ def test_entity_type_missing_name():
     assert 'must be a mapping with at least a "name" field' in out
 
 
-def test_variable_token_must_use_angle_brackets():
-    content = VALID.replace('token: <project_title>', 'token: project_title')
+def test_variable_token_must_use_double_curly_braces():
+    content = VALID.replace('token: "{{project_title}}"', 'token: project_title')
     code, out = run_validator(SCRIPT, content)
     assert code == 1
-    assert 'must use angle brackets' in out
+    assert 'must use double curly braces' in out
 
 
 def test_variable_scenarios_must_be_known():
@@ -175,7 +175,7 @@ def test_variable_scenarios_must_be_known():
 
 
 def test_missing_required_body_section():
-    content = VALID.replace('## Variable Data Strategy\n\n- `<project_title>` is generated.\n\n', '')
+    content = VALID.replace('## Variable Data Strategy\n\n- `{{project_title}}` is generated.\n\n', '')
     code, out = run_validator(SCRIPT, content)
     assert code == 1
     assert 'Missing required section in body: ## Variable Data Strategy' in out

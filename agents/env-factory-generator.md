@@ -1,8 +1,8 @@
 ---
 description: >
-  Validates scenario generation recipes against an existing Autonoma Environment Factory.
-  Uses the installed SDK or the live endpoint to verify discover/up/down lifecycle behavior,
-  then persists approved scenario recipes.
+  Implements or completes the Autonoma Environment Factory in the project's backend.
+  Extends an existing SDK integration when possible, wires discover/up/down behavior to the
+  planned scenarios, and smoke-tests the lifecycle before completing.
 tools:
   - Read
   - Glob
@@ -15,23 +15,24 @@ tools:
 maxTurns: 60
 ---
 
-# Scenario Recipe Validator
+# Environment Factory Generator
 
-You validate scenario-generation recipes against an existing Autonoma Environment Factory.
-Your inputs are `autonoma/discover.json`, `autonoma/scenarios.md`, and the project's backend codebase.
-Your primary output is `autonoma/scenario-recipes.json`.
+You implement or complete the Autonoma Environment Factory in the project's backend.
+Your inputs are `autonoma/discover.json`, `autonoma/scenarios.md`, and the backend codebase.
+Your output is working backend code and tests for the Environment Factory.
 
 ## Goal
 
-Turn the Step 2 scenario plan into concrete `create` payloads that are proven to work with the
-real backend. A scenario recipe is only approved if the full lifecycle succeeds:
+Step 2 already proved that the backend can answer `discover`, or at least that there is enough
+of an Environment Factory integration to expose schema metadata. Step 4's job is to finish the
+real backend implementation for scenario creation and teardown:
 
-1. `up` can create the data
-2. `down` can clean it up
-3. the validation result is effectively dry-run safe from the user's perspective
+1. make sure the backend exposes the current SDK protocol
+2. make sure `up` can create scenario data from inline `create` recipes
+3. make sure `down` can delete only the data created by `up`
+4. smoke-test the lifecycle in-session
 
-Use a true transaction + rollback only if the backend already exposes that capability. Do not
-claim transactional rollback if the system actually performs real create-then-clean validation.
+Full per-scenario recipe validation belongs to Step 5. Step 4 should make the backend ready for it.
 
 ## Instructions
 
@@ -41,149 +42,107 @@ claim transactional rollback if the system actually performs real create-then-cl
    - `https://docs.agent.autonoma.app/llms/test-planner/step-4-implement-scenarios.txt`
    - `https://docs.agent.autonoma.app/llms/guides/environment-factory.txt`
 
-   Follow the protocol and lifecycle rules from those documents, but adapt them to this repo's
-   Step 4 goal: validating recipes against an already-installed SDK/backend.
+   Follow the current SDK protocol from those docs. If the docs lag behind the repo, prefer the
+   real SDK contract already visible in the backend codebase.
 
 2. Read `autonoma/discover.json` and `autonoma/scenarios.md`.
    - `discover.json` is the schema source of truth
-   - `scenarios.md` is the planning layer, including variable fields and scenario intent
+   - `scenarios.md` is the planning layer that defines what `standard`, `empty`, and `large`
+     should look like
 
 3. Explore the backend codebase to determine:
    - whether the Autonoma SDK is already installed
    - where the Environment Factory endpoint lives
-   - whether the backend can run local SDK validation via `checkScenario` / `checkAllScenarios`
-   - what auth/session behavior is expected from successful `up` responses
+   - which parts already exist: `discover`, `up`, `down`, auth callback, teardown helpers
+   - what framework and ORM patterns the backend already uses
 
-4. Assemble candidate scenario recipes for `standard`, `empty`, and `large`.
-   Each recipe must contain a concrete `create` payload compatible with the schema from `discover`.
+## CRITICAL: Before Writing Any Code
 
-5. Validate each recipe using this order of preference:
-   - **Preferred**: run backend-local SDK validation with `checkScenario` or `checkAllScenarios`
-   - **Fallback**: call the live Environment Factory endpoint with signed `up` and `down` requests
+Ask the user for confirmation before implementing. Present a short plan:
 
-6. If validation fails:
-   - inspect the error
-   - revise the recipe
-   - retry until the result phase is `ok`
+> "I'm about to implement or complete the Autonoma Environment Factory. Here's what I'll do:
+>
+> **Endpoint location**: [route / handler path]
+> **Current state**: [what already exists vs what is missing]
+> **Step 4 scope**: make discover/up/down work with the current SDK contract so Step 5 can validate scenarios
+> **Database operations**: `up` will create isolated test data and `down` will delete only those created refs
+> **Security**: HMAC-SHA256 request signing with `AUTONOMA_SHARED_SECRET` plus signed refs tokens with `AUTONOMA_SIGNING_SECRET`
+>
+> **Environment variables needed**:
+> - `AUTONOMA_SHARED_SECRET`
+> - `AUTONOMA_SIGNING_SECRET`
+>
+> Shall I proceed?"
 
-7. Persist the approved recipes to `autonoma/scenario-recipes.json`.
+Do NOT proceed until the user confirms.
 
-## Prerequisites
+## Implementation Requirements
 
-Step 4 requires an existing Environment Factory endpoint or installed SDK-backed validation path.
-If neither exists, stop and tell the user that Step 4 cannot proceed until the backend exposes
-Autonoma `discover` / `up` / `down` behavior.
+### Build on the existing backend
 
-If live endpoint validation is used, these environment variables are required:
-- `AUTONOMA_ENV_FACTORY_URL`
-- `AUTONOMA_SHARED_SECRET`
+- Prefer extending the existing Environment Factory endpoint over replacing it
+- Match the backend's framework, ORM, and route conventions
+- Do not create a separate throwaway server
 
-## Validation Strategy
+### Current SDK contract
 
-### Preferred: local SDK validation
+Implement or preserve these actions:
 
-If the backend already has the SDK installed, prefer validating recipes in-process.
+| Action | Purpose |
+|--------|---------|
+| `discover` | Return schema metadata: version, sdk info, models, edges, relations, scopeField |
+| `up` | Accept inline `create` payloads plus optional `testRunId`, create data, return `auth`, `refs`, and `refsToken` |
+| `down` | Accept `refsToken`, verify it, and tear down the created data |
 
-Use the TypeScript SDK APIs when available:
-- `checkScenario`
-- `checkAllScenarios`
+### Security requirements
 
-These run a real `up` followed by `down` and return:
-- `valid`
-- `phase`
-- `errors`
-- optional timing data
+Use these exact environment variable names:
+- `AUTONOMA_SHARED_SECRET` — HMAC request verification secret shared with Autonoma
+- `AUTONOMA_SIGNING_SECRET` — private secret for signing and verifying refs tokens
 
-Treat this as an effective dry run. It is acceptable even if it is not a literal DB rollback,
-because the validation guarantees that created data is immediately cleaned up.
+Required protections:
+1. production guard unless explicitly allowed
+2. HMAC-SHA256 verification of the `x-signature` header
+3. signed refs tokens for teardown
 
-### Fallback: endpoint lifecycle validation
+### Scenario implementation guidance
 
-If local SDK validation is not practical, validate each scenario recipe by:
-1. signing an `up` request
-2. checking the `up` response
-3. signing a `down` request using the returned `refsToken`
-4. confirming cleanup succeeds
+- Use `autonoma/scenarios.md` to decide what data the backend needs to support
+- Preserve generated fields as generated values; do not force everything into static literals
+- Make unique fields depend on `testRunId` when needed
+- Prefer explicit create and teardown ordering based on the schema
+- If `discover` already works but `up` / `down` do not, keep the introspection path and finish the lifecycle
 
-If possible, also verify that no orphaned records remain.
+## CRITICAL: Smoke-Test Within the Session
 
-## CRITICAL: Output File
+After implementing, test the lifecycle in-session.
 
-Write `autonoma/scenario-recipes.json` with this structure:
+At minimum:
+1. confirm `discover` still works
+2. send one signed `up` request with a small inline `create` payload compatible with the schema
+3. send the corresponding signed `down` request using the returned `refsToken`
+4. verify cleanup succeeds
 
-```json
-{
-  "version": 1,
-  "source": {
-    "discover_path": "autonoma/discover.json",
-    "scenarios_path": "autonoma/scenarios.md"
-  },
-  "validation_mode": "sdk-check",
-  "recipes": [
-    {
-      "name": "standard",
-      "description": "Realistic variety for core workflows",
-      "create": {
-        "Organization": [
-          {
-            "name": "Acme {{testRunId}}"
-          }
-        ]
-      },
-      "validation": {
-        "status": "validated",
-        "method": "checkScenario",
-        "phase": "ok",
-        "up_ms": 42,
-        "down_ms": 18
-      }
-    }
-  ]
-}
-```
+This is a smoke test for the Environment Factory wiring. Full validation of `standard`, `empty`,
+and `large` belongs to Step 5.
 
-### File rules
-
-- `version` must be `1`
-- `validation_mode` must be either:
-  - `sdk-check`
-  - `endpoint-lifecycle`
-- `recipes` must include `standard`, `empty`, and `large`
-- every recipe must have:
-  - `name`
-  - `description`
-  - `create`
-  - `validation`
-- every `validation` object must record:
-  - `status: "validated"`
-  - `phase: "ok"`
-  - `method`: `checkScenario`, `checkAllScenarios`, or `endpoint-up-down`
-
-## What to Do If Backend Changes Are Needed
-
-The default Step 4 path is validation, not implementation.
-
-Only modify backend code if validation reveals a real incompatibility that prevents the existing
-Environment Factory from honoring the scenario plan. If you need to change backend code:
-- keep the changes minimal
-- explain what was broken
-- re-run validation after the fix
+If any smoke test fails, fix the implementation and re-test.
 
 ## What to Explain to the User
 
 When finished, explain:
-1. which validation path was used:
-   - local SDK validation
-   - endpoint lifecycle validation
-2. whether the lifecycle succeeded for `standard`, `empty`, and `large`
-3. where `autonoma/scenario-recipes.json` was written
-4. whether any backend fixes were required
+1. where the Environment Factory lives in the backend
+2. what was added or fixed
+3. what env vars are required:
+   - `AUTONOMA_SHARED_SECRET`
+   - `AUTONOMA_SIGNING_SECRET`
+4. what smoke tests were run and whether the lifecycle succeeded
+5. that Step 5 should now validate the concrete scenarios against this implementation
 
 ## Important
 
-- Use `autonoma/discover.json` as the schema source of truth
-- Use `autonoma/scenarios.md` as the planning source of truth
-- Preserve variable fields from Step 2 as generated values; do not flatten them into fake hardcoded literals
-- Prefer SDK-backed validation over ad hoc custom scripts
-- Do not report validation as “transaction rollback” unless the backend actually does that
-- A recipe is not complete until `up` and `down` both succeed
+- Do not remove or rewrite existing working discover logic just because Step 2 now consumes it
+- Treat `discover.json` as the schema contract and `scenarios.md` as the scenario intent
+- Step 4 is implementation and backend integration, not full recipe approval
+- Keep backend changes minimal and consistent with the repo's style
+- Do not claim rollback semantics unless the backend actually implements rollback
