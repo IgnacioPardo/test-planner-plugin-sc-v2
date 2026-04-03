@@ -94,6 +94,11 @@ variable_fields:
     generator: "faker.company.name"
     reason: "title must be unique per test run"
     test_reference: "({{project_title}} variable)"
+planning_sections:
+  - sdk_discover
+  - schema_summary
+  - relationship_map
+  - variable_data_strategy
 ---
 ```
 
@@ -119,6 +124,11 @@ variable_fields:
   - `generator`: generator hint such as `faker.company.name`
   - `reason`: why this field must be generated
   - `test_reference`: how tests should refer to the value in natural language
+- **planning_sections**: A list describing which planning artifacts are present. It must include:
+  - `sdk_discover`
+  - `schema_summary`
+  - `relationship_map`
+  - `variable_data_strategy`
 
 ### After the frontmatter
 
@@ -139,13 +149,14 @@ you'll receive an error message. Fix the issue and rewrite the file.
 The validation checks:
 - File starts with `---` (YAML frontmatter)
 - Frontmatter contains scenario_count, scenarios, entity_types, discover, variable_fields
+- Frontmatter contains planning_sections metadata
 - scenarios list length matches scenario_count
 - Required scenarios (standard, empty, large) are present
 - Each scenario has name, description, entity_types, total_entities
 - entity_types is a non-empty list with name fields
 - discover includes sdk source, schema counts, and scope field
 - variable_fields entries use double-curly tokens and known scenario names
-- body includes SDK Discover, Schema Summary, Relationship Map, and Variable Data Strategy sections
+- planning_sections includes sdk_discover, schema_summary, relationship_map, and variable_data_strategy
 
 ## Important
 

@@ -15,7 +15,7 @@ if not isinstance(data, dict):
     print('Root must be a JSON object')
     sys.exit(1)
 
-required = ['version', 'source', 'validation_mode', 'recipes']
+required = ['version', 'source', 'validationMode', 'recipes']
 missing = [f for f in required if f not in data]
 if missing:
     print(f'Missing required fields: {missing}')
@@ -31,16 +31,16 @@ if not isinstance(source, dict):
     print('source must be an object')
     sys.exit(1)
 
-for field in ['discover_path', 'scenarios_path']:
+for field in ['discoverPath', 'scenariosPath']:
     value = source.get(field)
     if not isinstance(value, str) or len(value.strip()) == 0:
         print(f'source.{field} must be a non-empty string')
         sys.exit(1)
 
-validation_mode = data.get('validation_mode')
+validation_mode = data.get('validationMode')
 valid_modes = {'sdk-check', 'endpoint-lifecycle'}
 if validation_mode not in valid_modes:
-    print(f'validation_mode must be one of {valid_modes}, got: {validation_mode}')
+    print(f'validationMode must be one of {valid_modes}, got: {validation_mode}')
     sys.exit(1)
 
 recipes = data.get('recipes')

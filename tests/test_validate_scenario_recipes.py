@@ -7,10 +7,10 @@ SCRIPT = 'validate_scenario_recipes.py'
 VALID_DATA = {
     'version': 1,
     'source': {
-        'discover_path': 'autonoma/discover.json',
-        'scenarios_path': 'autonoma/scenarios.md',
+        'discoverPath': 'autonoma/discover.json',
+        'scenariosPath': 'autonoma/scenarios.md',
     },
-    'validation_mode': 'sdk-check',
+    'validationMode': 'sdk-check',
     'recipes': [
         {
             'name': 'standard',
@@ -79,10 +79,10 @@ def test_missing_required_fields():
 
 
 def test_invalid_validation_mode():
-    data = {**VALID_DATA, 'validation_mode': 'rollback'}
+    data = {**VALID_DATA, 'validationMode': 'rollback'}
     code, out = run_validator(SCRIPT, _json(data), 'scenario-recipes.json')
     assert code == 1
-    assert 'validation_mode must be one of' in out
+    assert 'validationMode must be one of' in out
 
 
 def test_missing_required_recipe_name():

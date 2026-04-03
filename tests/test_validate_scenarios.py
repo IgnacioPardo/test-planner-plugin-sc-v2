@@ -37,6 +37,11 @@ variable_fields:
     generator: faker.company.name
     reason: title must be unique per test run
     test_reference: ({{project_title}} variable)
+planning_sections:
+  - sdk_discover
+  - schema_summary
+  - relationship_map
+  - variable_data_strategy
 ---
 
 # Scenarios
@@ -174,8 +179,11 @@ def test_variable_scenarios_must_be_known():
     assert 'unknown scenario names' in out
 
 
-def test_missing_required_body_section():
-    content = VALID.replace('## Variable Data Strategy\n\n- `{{project_title}}` is generated.\n\n', '')
+def test_missing_required_planning_section():
+    content = VALID.replace(
+        'planning_sections:\n  - sdk_discover\n  - schema_summary\n  - relationship_map\n  - variable_data_strategy\n',
+        'planning_sections:\n  - sdk_discover\n  - schema_summary\n  - relationship_map\n',
+    )
     code, out = run_validator(SCRIPT, content)
     assert code == 1
-    assert 'Missing required section in body: ## Variable Data Strategy' in out
+    assert 'Missing required planning_sections' in out

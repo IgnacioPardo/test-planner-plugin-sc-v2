@@ -26,7 +26,7 @@ if not isinstance(fm, dict):
     sys.exit(1)
 
 # Required fields
-required = ['scenario_count', 'scenarios', 'entity_types', 'discover', 'variable_fields']
+required = ['scenario_count', 'scenarios', 'entity_types', 'discover', 'variable_fields', 'planning_sections']
 missing = [f for f in required if f not in fm]
 if missing:
     print(f'Missing required frontmatter fields: {missing}')
@@ -138,17 +138,31 @@ for i, variable in enumerate(variable_fields):
         print(f'variable_fields[{i}].scenarios has unknown scenario names: {unknown_names}')
         sys.exit(1)
 
-# Validate required body sections
-body = parts[2]
-required_sections = [
-    '## SDK Discover',
-    '## Schema Summary',
-    '## Relationship Map',
-    '## Variable Data Strategy',
-]
-for section in required_sections:
-    if section not in body:
-        print(f'Missing required section in body: {section}')
+# Validate planning_sections metadata
+planning_sections = fm.get('planning_sections')
+if not isinstance(planning_sections, list) or len(planning_sections) == 0:
+    print('planning_sections must be a non-empty list')
+    sys.exit(1)
+
+required_sections = {
+    'sdk_discover',
+    'schema_summary',
+    'relationship_map',
+    'variable_data_strategy',
+}
+unknown_sections = [section for section in planning_sections if not isinstance(section, str) or len(section.strip()) == 0]
+if unknown_sections:
+    print('planning_sections must contain only non-empty strings')
+    sys.exit(1)
+
+missing_sections = required_sections - set(planning_sections)
+if missing_sections:
+    print(f'Missing required planning_sections: {missing_sections}')
+    sys.exit(1)
+
+for section in planning_sections:
+    if section not in required_sections:
+        print(f'planning_sections contains unknown value: {section}')
         sys.exit(1)
 
 print('OK')
