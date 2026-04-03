@@ -73,10 +73,10 @@ Every output file has YAML frontmatter validated by shell scripts (not prompts).
 
 ## Environment Variables
 
-Step 2 and Step 4 use the live Environment Factory endpoint when fetching `discover` or validating through HTTP:
+Step 2 and Step 4 use the live SDK endpoint when fetching `discover` or validating through HTTP:
 
 ```bash
-AUTONOMA_ENV_FACTORY_URL=<your endpoint url>
+AUTONOMA_SDK_ENDPOINT=<your sdk endpoint url>
 AUTONOMA_SHARED_SECRET=<shared HMAC secret>
 ```
 

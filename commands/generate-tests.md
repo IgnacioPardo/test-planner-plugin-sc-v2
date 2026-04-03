@@ -143,7 +143,7 @@ echo "GENERATION_ID=${GENERATION_ID:-<empty>}"
 
 Before spawning the Step 2 subagent, fetch the SDK discover artifact and save it to `autonoma/discover.json`.
 This step requires these environment variables:
-- `AUTONOMA_ENV_FACTORY_URL` — full URL of the customer's Environment Factory endpoint
+- `AUTONOMA_SDK_ENDPOINT` — full URL of the customer's SDK endpoint
 - `AUTONOMA_SHARED_SECRET` — the HMAC shared secret used by the SDK endpoint
 
 If either variable is missing, stop and tell the user that Step 2 now requires SDK discover access.
@@ -156,7 +156,7 @@ AUTONOMA_ROOT=$(cat /tmp/autonoma-project-root 2>/dev/null || echo '.')
 mkdir -p "$AUTONOMA_ROOT/autonoma"
 BODY='{"action":"discover"}'
 SIG=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "$AUTONOMA_SHARED_SECRET" | sed 's/.*= //')
-RESPONSE=$(curl -sS -w "\nHTTP_STATUS:%{http_code}" -X POST "$AUTONOMA_ENV_FACTORY_URL" \
+RESPONSE=$(curl -sS -w "\nHTTP_STATUS:%{http_code}" -X POST "$AUTONOMA_SDK_ENDPOINT" \
   -H "Content-Type: application/json" \
   -H "x-signature: $SIG" \
   -d "$BODY")
@@ -171,7 +171,7 @@ python3 "$AUTONOMA_ROOT/hooks/validators/validate_discover.py" "$AUTONOMA_ROOT/a
 ```
 
 If the fetch fails or validation fails, stop the pipeline at Step 2.
-Do not suggest skipping ahead. Tell the user to provide a working Environment Factory endpoint and correct shared secret, then rerun the command.
+Do not suggest skipping ahead. Tell the user to provide a working SDK endpoint and correct shared secret, then rerun the command.
 
 Spawn the `scenario-generator` subagent with the following task:
 
