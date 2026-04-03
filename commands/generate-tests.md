@@ -234,6 +234,9 @@ Spawn the `test-case-generator` subagent with the following task:
 > You MUST create `autonoma/qa-tests/INDEX.md` with frontmatter containing total_tests,
 > total_folders, folder breakdown, and coverage_correlation.
 > Each test file MUST have frontmatter with title, description, criticality, scenario, and flow.
+> Treat `scenarios.md` as fixture input only. Do not generate tests whose purpose is to verify
+> scenario counts, seeded inventories, or Environment Factory correctness. Only reference
+> scenario data when it is needed to test a real user-facing app behavior.
 > Fetch the latest instructions from https://docs.agent.autonoma.app/llms/test-planner/step-3-e2e-tests.txt first.
 
 **After the subagent completes:**

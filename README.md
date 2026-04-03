@@ -48,6 +48,8 @@ Generates markdown test files organized by feature in `autonoma/qa-tests/`. Each
 
 An `INDEX.md` tracks total test count, folder breakdown, and coverage correlation with your codebase size.
 
+`scenarios.md` is fixture input for this step, not the subject under test. Step 3 should not spend test budget verifying seeded counts or Environment Factory correctness.
+
 **You review**: test distribution and coverage correlation. Test count should roughly match 3-5x your route/feature count.
 
 ### Step 4: Environment Factory
