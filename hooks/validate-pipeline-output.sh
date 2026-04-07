@@ -16,6 +16,11 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 VALIDATORS_DIR="$SCRIPT_DIR/validators"
 
+# Persist the plugin root so orchestrator/subagent bash snippets can find plugin-local scripts.
+# This hook is the earliest reliable place where we know the plugin directory.
+PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+echo "$PLUGIN_ROOT" > /tmp/autonoma-plugin-root
+
 # Ensure PyYAML is available (required for frontmatter parsing)
 python3 -c "import yaml" 2>/dev/null || pip3 install pyyaml -q 2>/dev/null
 
@@ -24,6 +29,10 @@ case "$FILE_PATH" in
   */autonoma/AUTONOMA.md)
     VALIDATOR_SCRIPT="$VALIDATORS_DIR/validate_kb.py"
     VALIDATOR_NAME="validate-kb"
+    ;;
+  */autonoma/discover.json)
+    VALIDATOR_SCRIPT="$VALIDATORS_DIR/validate_discover.py"
+    VALIDATOR_NAME="validate-discover"
     ;;
   */autonoma/features.json)
     VALIDATOR_SCRIPT="$VALIDATORS_DIR/validate_features.py"
