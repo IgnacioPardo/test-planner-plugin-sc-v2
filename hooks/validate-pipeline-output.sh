@@ -42,6 +42,10 @@ case "$FILE_PATH" in
     VALIDATOR_SCRIPT="$VALIDATORS_DIR/validate_scenarios.py"
     VALIDATOR_NAME="validate-scenarios"
     ;;
+  */autonoma/scenario-recipes.json)
+    VALIDATOR_SCRIPT="$VALIDATORS_DIR/validate_scenario_recipes.py"
+    VALIDATOR_NAME="validate-scenario-recipes"
+    ;;
   */autonoma/qa-tests/INDEX.md)
     VALIDATOR_SCRIPT="$VALIDATORS_DIR/validate_test_index.py"
     VALIDATOR_NAME="validate-test-index"
@@ -80,6 +84,24 @@ EXIT_CODE=$?
 if [ $EXIT_CODE -ne 0 ] || [ "$RESULT" != "OK" ]; then
   echo "VALIDATION FAILED [$VALIDATOR_NAME]: $RESULT" >&2
   exit 2
+fi
+
+# scenario-recipes.json must also pass live endpoint preflight. This is the
+# only deterministic check that the generated create payload actually works
+# against the current SDK contract.
+if [ "$VALIDATOR_NAME" = "validate-scenario-recipes" ]; then
+  PREFLIGHT_SCRIPT="$SCRIPT_DIR/preflight_scenario_recipes.py"
+  if [ ! -f "$PREFLIGHT_SCRIPT" ]; then
+    echo "VALIDATION FAILED [scenario-recipes-preflight]: Script not found: $PREFLIGHT_SCRIPT" >&2
+    exit 2
+  fi
+
+  PREFLIGHT_RESULT=$(python3 "$PREFLIGHT_SCRIPT" "$FILE_PATH" 2>&1)
+  PREFLIGHT_EXIT=$?
+  if [ $PREFLIGHT_EXIT -ne 0 ]; then
+    echo "VALIDATION FAILED [scenario-recipes-preflight]: $PREFLIGHT_RESULT" >&2
+    exit 2
+  fi
 fi
 
 # For INDEX.md, also validate directory structure
