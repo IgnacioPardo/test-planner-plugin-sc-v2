@@ -37,17 +37,30 @@ Your output is a directory `autonoma/qa-tests/` containing:
    - All files in `autonoma/skills/`
    - `autonoma/scenarios.md` — parse the frontmatter to get scenarios and entity_types
 
-3. Count the routes/features/pages in the codebase to establish the coverage correlation.
+3. Treat `autonoma/scenarios.md` as fixture input, not as the subject under test.
+   The scenarios exist only to provide preconditions and known data for app behavior tests.
+   Do NOT generate tests whose purpose is to verify:
+   - that the scenario contains the documented entity counts
+   - that every scenario row, seed, or example value exists
+   - that the Environment Factory created data correctly
+   - that `standard`, `empty`, or `large` themselves are "correct" as artifacts
+
+   Only reference scenario data when it is necessary to exercise a real user-facing flow.
+   Example:
+   - good: "open the project `{{project_title}}` and verify editing works"
+   - bad: "verify the scenario created 12 projects and 3 users"
+
+4. Count the routes/features/pages in the codebase to establish the coverage correlation.
    The total test count should roughly correlate:
    - Rule of thumb: 3-5 tests per route/feature for supporting flows
    - Rule of thumb: 8-15 tests per core flow
    - This is approximate — use judgment, but the INDEX must declare the correlation
 
-4. Generate test files organized in subdirectories by feature/flow.
+5. Generate test files organized in subdirectories by feature/flow.
 
-5. Write `autonoma/qa-tests/INDEX.md` FIRST (before individual test files).
+6. Write `autonoma/qa-tests/INDEX.md` FIRST (before individual test files).
 
-6. Write individual test files into subdirectories.
+7. Write individual test files into subdirectories.
 
 ## CRITICAL: INDEX.md Format
 
@@ -145,6 +158,9 @@ The body follows the standard Autonoma test format from the fetched instructions
 - Never write conditional steps — each test follows one deterministic path
 - Assertions must specify exact text, element, or visual state
 - Reference scenario data by exact values from scenarios.md
+- Do not spend test budget "auditing" scenario contents. Scenario data is setup, not the product behavior under test.
+- Do not write meta-tests such as "verify the seeded counts match scenarios.md" or "verify the Environment Factory created the right fixtures"
+- If a seeded value is not needed for a user-facing flow, do not assert it just because it exists in scenarios.md
 
 ## Validation
 
@@ -169,3 +185,4 @@ you'll receive an error message. Fix the issue and rewrite the file.
 - Use subagents to parallelize test generation across folders
 - Each test must be self-contained — no dependencies on other tests
 - Do not write code (no Playwright, no Cypress) — tests are markdown with natural language steps
+- Prefer testing visible user outcomes over seed correctness or fixture inventory
