@@ -87,13 +87,33 @@ def _load_discover_schema(filepath, source):
 
     # Collect relation field names used as nesting keys in nested tree create payloads
     relation_fields = set()
+    # Map child FK fields to their parent model for flat-format detection.
+    # e.g. { ("Users", "organizationId"): "Organizations" }
+    nestable_fk_edges = {}
     relations = schema.get('relations')
     if isinstance(relations, list):
         for rel in relations:
             if isinstance(rel, dict) and isinstance(rel.get('parentField'), str):
                 relation_fields.add(rel['parentField'])
+            # A relation where childField is an FK column on the child model means
+            # the child SHOULD be nested under the parent via the parentField key.
+            if (isinstance(rel, dict)
+                    and isinstance(rel.get('parentModel'), str)
+                    and isinstance(rel.get('childModel'), str)
+                    and isinstance(rel.get('childField'), str)
+                    and isinstance(rel.get('parentField'), str)):
+                child_model = rel['childModel']
+                child_fk = rel['childField']
+                parent_model = rel['parentModel']
+                # Only record edges where child FK is a real column (not the reverse relation)
+                if child_model in model_map and child_fk in model_map[child_model]:
+                    nestable_fk_edges[(child_model, child_fk)] = parent_model
 
-    return {'models': model_map, 'relation_fields': relation_fields}, None
+    return {
+        'models': model_map,
+        'relation_fields': relation_fields,
+        'nestable_fk_edges': nestable_fk_edges,
+    }, None
 
 
 def _validate_value_against_field(value, field, path):
@@ -128,6 +148,9 @@ def _validate_create_against_discover(create, discover_info, recipe_index):
 
     model_map = discover_info['models']
     relation_fields = discover_info['relation_fields']
+    nestable_fk_edges = discover_info.get('nestable_fk_edges', {})
+
+    top_level_models = set(create.keys())
 
     for model_name, entities in create.items():
         if model_name not in model_map:
@@ -150,6 +173,24 @@ def _validate_create_against_discover(create, discover_info, recipe_index):
                         f'recipes[{recipe_index}].create.{model_name}[{entity_index}].{field_name} '
                         'is not present in discover schema'
                     )
+
+                # Detect flat-format _ref on FK fields that should be nested.
+                # If an entity uses {"_ref": "..."} for a FK field whose parent
+                # model is also a top-level key in create, the recipe is using
+                # flat format instead of the required nested tree structure.
+                if (isinstance(value, dict)
+                        and '_ref' in value
+                        and len(value) == 1):
+                    parent_model = nestable_fk_edges.get((model_name, field_name))
+                    if parent_model and parent_model in top_level_models:
+                        return (
+                            f'recipes[{recipe_index}].create.{model_name}[{entity_index}].{field_name} '
+                            f'uses {{"_ref": "..."}} but {model_name} should be nested under '
+                            f'{parent_model} using the relation field instead of flat _ref. '
+                            f'The dashboard may reorder JSON keys, which breaks flat _ref resolution. '
+                            f'Use a nested tree structure rooted at the scope entity.'
+                        )
+
                 error = _validate_value_against_field(
                     value,
                     field_map[field_name],

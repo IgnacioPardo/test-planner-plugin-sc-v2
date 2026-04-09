@@ -421,3 +421,157 @@ def test_nested_tree_with_relation_fields():
     code, out = _run_recipe_validator(data, discover=discover)
     assert code == 0
     assert out == 'OK'
+
+
+def test_rejects_flat_ref_for_nestable_fk():
+    """Flat _ref for a FK that should be expressed via nesting must be rejected.
+
+    The dashboard may reorder JSON keys, breaking insertion-order-dependent _ref
+    resolution. Child models must be nested under their parent using relation
+    field names, not placed in separate top-level arrays with _ref.
+    """
+    discover = {
+        'schema': {
+            'models': [
+                {
+                    'name': 'Organization',
+                    'tableName': 'organizations',
+                    'fields': [
+                        {'name': 'id', 'type': 'String', 'isRequired': True, 'isId': True, 'hasDefault': True},
+                        {'name': 'name', 'type': 'String', 'isRequired': True, 'isId': False, 'hasDefault': False},
+                    ],
+                },
+                {
+                    'name': 'User',
+                    'tableName': 'users',
+                    'fields': [
+                        {'name': 'id', 'type': 'String', 'isRequired': True, 'isId': True, 'hasDefault': True},
+                        {'name': 'name', 'type': 'String', 'isRequired': True, 'isId': False, 'hasDefault': False},
+                        {'name': 'organizationId', 'type': 'String', 'isRequired': True, 'isId': False, 'hasDefault': False},
+                    ],
+                },
+            ],
+            'edges': [
+                {'from': 'User', 'to': 'Organization', 'localField': 'organizationId', 'foreignField': 'id', 'nullable': False},
+            ],
+            'relations': [
+                {'parentModel': 'Organization', 'childModel': 'User', 'parentField': 'users', 'childField': 'organizationId'},
+            ],
+            'scopeField': 'organizationId',
+        }
+    }
+    data = {
+        'version': 1,
+        'source': {'discoverPath': 'autonoma/discover.json', 'scenariosPath': 'autonoma/scenarios.md'},
+        'validationMode': 'sdk-check',
+        'recipes': [
+            {
+                'name': 'standard', 'description': 'Flat format with _ref',
+                'create': {
+                    'Organization': [{'_alias': 'org1', 'name': 'Acme'}],
+                    'User': [{'name': 'Alice', 'organizationId': {'_ref': 'org1'}}],
+                },
+                'validation': {'status': 'validated', 'method': 'checkScenario', 'phase': 'ok'},
+            },
+            {
+                'name': 'empty', 'description': 'Empty',
+                'create': {'Organization': []},
+                'validation': {'status': 'validated', 'method': 'checkScenario', 'phase': 'ok'},
+            },
+            {
+                'name': 'large', 'description': 'Large flat',
+                'create': {
+                    'Organization': [{'_alias': 'org2', 'name': 'Big'}],
+                    'User': [{'name': 'Bob', 'organizationId': {'_ref': 'org2'}}],
+                },
+                'validation': {'status': 'validated', 'method': 'checkScenario', 'phase': 'ok'},
+            },
+        ],
+    }
+    code, out = _run_recipe_validator(data, discover=discover)
+    assert code == 1
+    assert 'should be nested under Organization' in out
+    assert 'flat _ref' in out
+
+
+def test_allows_cross_branch_ref_in_nested_tree():
+    """Cross-branch _ref (e.g. assigneeId pointing to a user) is allowed.
+
+    When a model is NOT a top-level key (it's nested under its parent), a _ref
+    to it from a sibling branch is the correct pattern and must not be rejected.
+    """
+    discover = {
+        'schema': {
+            'models': [
+                {
+                    'name': 'Organization',
+                    'tableName': 'organizations',
+                    'fields': [
+                        {'name': 'id', 'type': 'String', 'isRequired': True, 'isId': True, 'hasDefault': True},
+                        {'name': 'name', 'type': 'String', 'isRequired': True, 'isId': False, 'hasDefault': False},
+                    ],
+                },
+                {
+                    'name': 'User',
+                    'tableName': 'users',
+                    'fields': [
+                        {'name': 'id', 'type': 'String', 'isRequired': True, 'isId': True, 'hasDefault': True},
+                        {'name': 'name', 'type': 'String', 'isRequired': True, 'isId': False, 'hasDefault': False},
+                        {'name': 'organizationId', 'type': 'String', 'isRequired': True, 'isId': False, 'hasDefault': False},
+                    ],
+                },
+                {
+                    'name': 'Task',
+                    'tableName': 'tasks',
+                    'fields': [
+                        {'name': 'id', 'type': 'String', 'isRequired': True, 'isId': True, 'hasDefault': True},
+                        {'name': 'title', 'type': 'String', 'isRequired': True, 'isId': False, 'hasDefault': False},
+                        {'name': 'assigneeId', 'type': 'String', 'isRequired': True, 'isId': False, 'hasDefault': False},
+                        {'name': 'organizationId', 'type': 'String', 'isRequired': True, 'isId': False, 'hasDefault': False},
+                    ],
+                },
+            ],
+            'edges': [
+                {'from': 'User', 'to': 'Organization', 'localField': 'organizationId', 'foreignField': 'id', 'nullable': False},
+                {'from': 'Task', 'to': 'User', 'localField': 'assigneeId', 'foreignField': 'id', 'nullable': False},
+                {'from': 'Task', 'to': 'Organization', 'localField': 'organizationId', 'foreignField': 'id', 'nullable': False},
+            ],
+            'relations': [
+                {'parentModel': 'Organization', 'childModel': 'User', 'parentField': 'users', 'childField': 'organizationId'},
+                {'parentModel': 'User', 'childModel': 'Task', 'parentField': 'tasks', 'childField': 'assigneeId'},
+                {'parentModel': 'Organization', 'childModel': 'Task', 'parentField': 'orgTasks', 'childField': 'organizationId'},
+            ],
+            'scopeField': 'organizationId',
+        }
+    }
+    data = {
+        'version': 1,
+        'source': {'discoverPath': 'autonoma/discover.json', 'scenariosPath': 'autonoma/scenarios.md'},
+        'validationMode': 'sdk-check',
+        'recipes': [
+            {
+                'name': 'standard', 'description': 'Nested with cross-branch ref',
+                'create': {
+                    'Organization': [{
+                        'name': 'Acme',
+                        'users': [{'_alias': 'alice', 'name': 'Alice'}],
+                        'orgTasks': [{'title': 'Task 1', 'assigneeId': {'_ref': 'alice'}}],
+                    }],
+                },
+                'validation': {'status': 'validated', 'method': 'checkScenario', 'phase': 'ok'},
+            },
+            {
+                'name': 'empty', 'description': 'Empty',
+                'create': {'Organization': []},
+                'validation': {'status': 'validated', 'method': 'checkScenario', 'phase': 'ok'},
+            },
+            {
+                'name': 'large', 'description': 'Large nested',
+                'create': {'Organization': [{'name': 'Big'}]},
+                'validation': {'status': 'validated', 'method': 'checkScenario', 'phase': 'ok'},
+            },
+        ],
+    }
+    code, out = _run_recipe_validator(data, discover=discover)
+    assert code == 0
+    assert out == 'OK'
