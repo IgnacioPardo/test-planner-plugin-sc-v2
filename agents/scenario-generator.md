@@ -200,3 +200,5 @@ The validation checks:
 - Every enum value must be covered in `standard`
 - Use the SDK discover output instead of re-deriving the schema from local code
 - If the discover artifact is missing, ask the user to provide a working SDK discover response
+- Only use `{{testRunId}}` as a template token — do not invent custom variable tokens like `{{user_email_alice}}`. The SDK template engine only resolves built-in expressions (`{{testRunId}}`, `{{index}}`, `{{cycle(...)}}`, etc.). Custom tokens cause a runtime error when the dashboard sends the payload directly to the endpoint. If a field needs uniqueness, inline the testRunId directly: e.g. `alice-{{testRunId}}@test.local`
+- Design scenario entity tables so they can be expressed as a nested tree rooted at the scope entity. The Step 4 agent will convert scenarios into nested `create` payloads — flat cross-model `_ref` only structures break when JSON key order is not preserved

@@ -114,6 +114,47 @@ Required protections:
 - Prefer explicit create and teardown ordering based on the schema
 - If `discover` already works but `up` / `down` do not, keep the introspection path and finish the lifecycle
 
+### CRITICAL: Use nested tree structure in `create` payloads
+
+Recipe `create` payloads MUST use a **nested tree** rooted at the scope entity (the model that
+owns `scopeField`). Do NOT use flat top-level model keys connected only by `_ref`.
+
+**Why:** The Autonoma dashboard may reorder JSON object keys when forwarding the `create` payload
+to the SDK endpoint. The SDK's `resolveTree` processes models in `Object.entries(create)` insertion
+order. If a child model (e.g. `Tasks`) appears before its parent (e.g. `Organizations`), `_ref`
+aliases are not yet registered, the INSERT runs without the FK value, and NOT NULL constraints fail.
+
+**How:** Nest children inside their parent using the SDK's relation field names from `discover.json`.
+Look at the `relations` array in the discover response — the `parentField` value is the nesting key.
+
+Instead of flat `_ref`:
+```json
+{
+  "Organizations": [{"_alias": "org1", "name": "Acme"}],
+  "Users": [{"name": "Alice", "organizationId": {"_ref": "org1"}}]
+}
+```
+
+Use nested tree:
+```json
+{
+  "Organizations": [{
+    "_alias": "org1",
+    "name": "Acme",
+    "userses": [{"_alias": "u1", "name": "Alice"}]
+  }]
+}
+```
+
+The SDK automatically sets the child FK (`organizationId`) when a child is nested under its parent.
+Use `_ref` only for **cross-branch** references that cannot be expressed by nesting (e.g. a Task
+nested under a Project that references a User nested under the same Organization via `assigneeId`).
+
+Only use `{{testRunId}}` as a template token in `create` values — do not invent custom tokens like
+`{{user_email_alice}}`. The SDK's template engine only resolves built-in expressions
+(`{{testRunId}}`, `{{index}}`, `{{cycle(...)}}`, etc.). Custom tokens cause a runtime error when the
+dashboard sends the payload directly to the endpoint.
+
 ## CRITICAL: Smoke-Test and Validate Within the Session
 
 After implementing, test the lifecycle in-session.
@@ -148,17 +189,24 @@ The file must be a JSON object in this exact logical shape:
       "name": "standard",
       "description": "Realistic dataset for core flows",
       "create": {
-        "User": [
-          {
-            "email": "{{owner_email}}"
-          }
-        ]
+        "Organization": [{
+          "_alias": "org1",
+          "name": "Acme Corp",
+          "userses": [
+            { "_alias": "owner", "email": "owner-{{testRunId}}@example.com" }
+          ],
+          "projectses": [
+            { "name": "Main Project", "taskses": [
+              { "title": "First task", "assigneeId": { "_ref": "owner" } }
+            ]}
+          ]
+        }]
       },
       "variables": {
-        "owner_email": {
+        "testRunId": {
           "strategy": "derived",
           "source": "testRunId",
-          "format": "owner+{testRunId}@example.com"
+          "format": "{testRunId}"
         }
       },
       "validation": {
@@ -172,6 +220,10 @@ The file must be a JSON object in this exact logical shape:
   ]
 }
 ```
+
+**Note:** The `create` payload uses a nested tree structure. Children are nested under parents using
+the relation field names from `discover.json` (e.g. `userses`, `projectses`, `taskses`). The SDK
+automatically fills in parent FK fields. Only cross-branch references use `_ref`.
 
 Required rules:
 - top-level keys must be `version`, `source`, `validationMode`, and `recipes`
