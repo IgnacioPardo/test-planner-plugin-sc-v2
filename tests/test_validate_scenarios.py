@@ -212,3 +212,23 @@ def test_missing_required_planning_section():
     code, out = run_validator(SCRIPT, content)
     assert code == 1
     assert 'Missing required planning_sections' in out
+
+
+def test_scoping_analysis_optional_section_accepted():
+    content = VALID.replace(
+        'planning_sections:\n  - sdk_discover\n  - schema_summary\n  - relationship_map\n  - variable_data_strategy\n',
+        'planning_sections:\n  - sdk_discover\n  - schema_summary\n  - relationship_map\n  - variable_data_strategy\n  - scoping_analysis\n',
+    )
+    code, out = run_validator(SCRIPT, content)
+    assert code == 0
+    assert out == 'OK'
+
+
+def test_unknown_planning_section_rejected():
+    content = VALID.replace(
+        'planning_sections:\n  - sdk_discover\n  - schema_summary\n  - relationship_map\n  - variable_data_strategy\n',
+        'planning_sections:\n  - sdk_discover\n  - schema_summary\n  - relationship_map\n  - variable_data_strategy\n  - made_up_section\n',
+    )
+    code, out = run_validator(SCRIPT, content)
+    assert code == 1
+    assert 'planning_sections contains unknown value: made_up_section' in out

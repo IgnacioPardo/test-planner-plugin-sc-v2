@@ -114,6 +114,18 @@ Required protections:
 - Prefer explicit create and teardown ordering based on the schema
 - If `discover` already works but `up` / `down` do not, keep the introspection path and finish the lifecycle
 
+### Per-run data isolation via testRunId
+
+When `scenarios.md` contains many variable fields with `generator: derived from testRunId` — especially
+on identifying fields like names, titles, and descriptions, not just emails — the app lacks natural
+multi-tenant isolation. The scenario generator slugged these fields so that parallel or sequential
+test runs never collide.
+
+Preserve all of these `{{testRunId}}` tokens in `create` payloads and map them to `derived` strategy
+entries in the recipe `variables` block. Do not collapse slugged fields back into concrete literals.
+For these apps, `testRunId` is effectively required for correct operation — note this in the summary
+you present to the user at the end of Step 4.
+
 ### CRITICAL: Use nested tree structure in `create` payloads
 
 Recipe `create` payloads MUST use a **nested tree** rooted at the scope entity (the model that

@@ -156,6 +156,11 @@ required_sections = {
     'relationship_map',
     'variable_data_strategy',
 }
+optional_sections = {
+    'scoping_analysis',
+}
+allowed_sections = required_sections | optional_sections
+
 unknown_sections = [section for section in planning_sections if not isinstance(section, str) or len(section.strip()) == 0]
 if unknown_sections:
     print('planning_sections must contain only non-empty strings')
@@ -167,7 +172,7 @@ if missing_sections:
     sys.exit(1)
 
 for section in planning_sections:
-    if section not in required_sections:
+    if section not in allowed_sections:
         print(f'planning_sections contains unknown value: {section}')
         sys.exit(1)
 

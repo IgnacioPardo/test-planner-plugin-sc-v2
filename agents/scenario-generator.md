@@ -36,6 +36,19 @@ You generate test data scenarios from a knowledge base. Your inputs are `autonom
    - parent/child relations
    - scope field
 
+   While reading the schema, assess whether the scope entity provides real **per-run data isolation**.
+   Ask yourself: does the scope entity parent most other models via required foreign keys? Can a new
+   scope entity be created per test run (i.e. it has creatable fields beyond just auto-generated IDs)?
+   Do most models in the graph eventually chain back to the scope entity?
+
+   If the answer is yes to all of these, the app has natural multi-tenant isolation — each test run
+   can create its own scope entity and all child data is automatically partitioned.
+
+   If the scope entity is a singleton, shared across users, or doesn't meaningfully partition data
+   across concurrent runs, the app **lacks natural per-run isolation**. In this case you must slug
+   all identifying fields with `{{testRunId}}` (see step 6 below) so that parallel or sequential
+   test runs never collide on lookup, search, or assertion values.
+
    If `autonoma/discover.json` is missing or malformed, stop and tell the user that Step 2 now
    requires a valid SDK discover artifact before scenario generation can continue.
 
@@ -49,11 +62,22 @@ You generate test data scenarios from a knowledge base. Your inputs are `autonom
    Example: prefer `Acme Project testRunId suffix` encoded as a concrete scenario value over turning the whole field
    into `{{project_name}}` unless later tests truly need the placeholder.
 
+   **Exception — apps without natural per-run isolation:** If your scoping analysis in step 3
+   determined the app lacks natural multi-tenant isolation, **reverse the default above**. Slug ALL
+   identifying fields — names, titles, descriptions, labels, slugs, emails, usernames — with inline
+   `{{testRunId}}` so that every value a test might search for, type into a form, or assert on screen
+   is unique to that test run. Use the pattern `Concrete Value {{testRunId}}` (e.g.
+   `Acme Corp {{testRunId}}`, `Main Project {{testRunId}}`). Each slugged field becomes a
+   `variable_field` entry with `generator: derived from testRunId`. This prevents parallel or
+   sequential test runs from interfering with each other when there is no scope entity to partition
+   the data.
+
    Use variable fields sparingly. Only mark a value as variable when at least one of these is true:
    - the field must be globally unique or is highly collision-prone across runs
    - the backend or SDK generates the value at runtime
    - the value is inherently time-based, unstable, or nondeterministic
    - hardcoding it would make later tests misleading or brittle
+   - **the app lacks natural per-run isolation** and the field is used in lookups, searches, or assertions
 
    Fields that are time-sensitive (dates, deadlines, timestamps) or have any uniqueness/format
    constraint enforced by the database or application **must** be variable — hardcoding them
@@ -162,6 +186,7 @@ planning_sections:
   - `schema_summary`
   - `relationship_map`
   - `variable_data_strategy`
+  - (optional) `scoping_analysis` — include this when the app lacks natural per-run isolation and you need to explain why fields were aggressively slugged with `{{testRunId}}`
 
 ### After the frontmatter
 
@@ -170,6 +195,7 @@ The rest of the file follows the standard scenarios.md format from the fetched i
 - Include a `## Schema Summary` section listing the key models and required fields that drive the scenarios.
 - Include a `## Relationship Map` section describing the important parent/child and FK relationships.
 - Include a `## Variable Data Strategy` section explaining which values are generated and how tests should reference them.
+- (Optional) Include a `## Scoping Analysis` section if the app lacks natural per-run isolation — explain why fields were aggressively slugged with `{{testRunId}}` and what isolation boundary the slugging replaces.
 - Scenario: `standard` (credentials, entity tables with concrete data, aggregate counts)
 - Scenario: `empty` (credentials, all entity types listed as None)
 - Scenario: `large` (credentials, high-volume data described in aggregate)
