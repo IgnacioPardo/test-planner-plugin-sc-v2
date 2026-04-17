@@ -10,11 +10,16 @@
     {
       "name": "autonoma-test-planner",
       "source": {
-        "source": "url",
-        "url": "https://github.com/IgnacioPardo/test-planner-plugin-sc-v2.git",
-        "ref": "IgnacioPardo/sdk-step-plan"
+        "source": "github",
+        "repo": "Autonoma-AI/test-planner-plugin",
+        "ref": "production"
       },
-      "description": "Generates comprehensive E2E test cases through a validated 5-step pipeline with deterministic validation"
+      "description": "Generates comprehensive E2E test cases through a validated multi-step pipeline with deterministic validation"
+    },
+    {
+      "name": "autonoma-test-planner-development",
+      "source": "./",
+      "description": "[DEVELOPMENT] Generates comprehensive E2E test cases through a validated multi-step pipeline with deterministic validation"
     }
   ]
 }
